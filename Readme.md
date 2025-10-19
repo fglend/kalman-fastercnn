@@ -165,8 +165,8 @@ or grant camera permission:
 
 ## 🧑‍💻 Author
 **Glend Dale Ferrer**  
-📧 gdferrer@up.edu.ph  
-🎓 UPBL – Smart Greenhouse Monitoring Research Project  
+📧 mgdferrer@tip.edu.ph 
+
 
 ---
 
