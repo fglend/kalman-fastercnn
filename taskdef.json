@@ -1,0 +1,30 @@
+{
+  "family": "pytorch-service-td",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "2048",
+  "memory": "16384",
+  "executionRoleArn": "arn:aws:iam::090143832849:role/ecsTaskExecutionRole",
+  "taskRoleArn": "arn:aws:iam::090143832849:role/pytorchTaskRole",
+  "containerDefinitions": [
+    {
+      "name": "pytorch-service",
+      "image": "090143832849.dkr.ecr.us-east-1.amazonaws.com/projects/kalmancnn:latest",
+      "portMappings": [{ "containerPort": 8080 }],
+      "essential": true,
+      "environment": [
+        { "name": "S3_BUCKET", "value": "glend-ai" },
+        { "name": "MODEL_KEY", "value": "models/prod/best_model.pth" },
+        { "name": "DEVICE", "value": "cpu" }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/pytorch-service",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "ecs"
+        }
+      }
+    }
+  ]
+}
