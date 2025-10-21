@@ -26,6 +26,11 @@ def load_model() -> FasterRCNN:
         if missing:   print("  missing:", missing[:8], "..." if len(missing) > 8 else "")
         if unexpected:print("  unexpected:", unexpected[:8], "..." if len(unexpected) > 8 else "")
 
+    # ✅ Allow more detections per image
+    model.roi_heads.detections_per_img = 350
+    model.rpn.post_nms_top_n_test = 2000
+    model.rpn.pre_nms_top_n_test = 2000
+
     model.to(device).eval()
     torch.set_grad_enabled(False)
     print(f"✅ Model loaded from {settings.MODEL_PATH} on {settings.DEVICE}")

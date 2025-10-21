@@ -25,4 +25,4 @@ COPY . .
 EXPOSE 8080
 
 # Run FastAPI and Localtunnel together
-CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port 8080 & lt --port 8080 --print-requests"]
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port 8080 & sleep 5 && lt --port 8080 --subdomain gd-live"]
