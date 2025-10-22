@@ -1,4 +1,4 @@
-# 🚀 Faster R-CNN API with Live Detection (FastAPI + PyTorch)
+# 🚀 Faster R-CNN w/ Kalman-Filter API with Live Detection (FastAPI + PyTorch)
 
 A lightweight web API for **real-time object detection** using a trained Faster R-CNN model.  
 Includes endpoints for image prediction, visualization, and live camera streaming—all optimized for smooth performance on both **Mac (M-series)** and **Windows**.
