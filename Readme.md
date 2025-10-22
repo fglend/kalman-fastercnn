@@ -21,7 +21,7 @@ URL: [Request Here](https://drive.google.com/file/d/1KC9LZ1u8av3O4lO-_VJ8r9P_2PH
 
 ## 🖼️ System Sample
 
-This is hosted via [Local Tunnel](https://theboroer.github.io/localtunnel-www/) which uses local ip address as password.
+This is hosted via [Local Tunnel](https://theboroer.github.io/localtunnel-www/) which uses local ip address as password. The password is located in the drive .txt
 
 Below is an example screenshot of the live detection interface:
 
