@@ -1,6 +1,6 @@
 # 🚀 Faster R-CNN w/ Kalman-Filter API with Live Detection (FastAPI + PyTorch)
 
-A lightweight web API for **real-time object detection** using a trained Faster R-CNN model.  
+A lightweight web API for **real-time object detection** using a trained Faster R-CNN w/ Kalman-Filter model.  
 Includes endpoints for image prediction, visualization, and live camera streaming—all optimized for smooth performance on both **Mac (M-series)** and **Windows**.
 
 ---
@@ -11,13 +11,41 @@ Includes endpoints for image prediction, visualization, and live camera streamin
 - **Visualization endpoint** returning annotated images (`/visualize-image`)  
 - **Live camera streaming** (`/live`) with threaded inference  
 - Compatible with **CPU, CUDA**, and **Apple Silicon (MPS)** backends  
-- Docker-ready for quick deployment  
+- Docker-ready for quick deployment
+
+---
+## Trained Model
+URL: [Request Here](https://drive.google.com/file/d/1KC9LZ1u8av3O4lO-_VJ8r9P_2PHnzsLU/view?usp=drive_link)
+
+---
+
+## 🖼️ System Sample
+
+Below is an example screenshot of the live detection interface:
+
+URL: [https://gd-live.loca.lt/](https://gd-live.loca.lt/) for Image/Video Analysis
+
+<p align="center">
+  <img src="/assets/1.png" alt="System Sample" width="600"/>
+</p>
+
+URL: [https://gd-live.loca.lt/live](https://gd-live.loca.lt/live) for live video analysis
+
+<p align="center">
+  <img src="/assets/2.png" alt="System Sample" width="600"/>
+</p>
+
+URL: [https://gd-live.loca.lt/docs](https://gd-live.loca.lt/docs) for api endpoints
+
+<p align="center">
+  <img src="/assets/3.png" alt="System Sample" width="600"/>
+</p>
 
 ---
 
 ## 📦 Requirements
 
-Python 3.10 +  
+Python 3.10+  
 
 ### Dependencies
 ```bash
@@ -38,7 +66,7 @@ opencv-python==4.10.0.84
 
 ```bash
 # 1️⃣ Clone the repository
-git clone https://github.com/yourusername/fasterrcnn-api.git
+git clone https://github.com/fglend/kalman-fastercnn.git
 cd fasterrcnn-api
 
 # 2️⃣ Create a virtual environment
@@ -91,14 +119,14 @@ Returns model device and server status.
 **POST** `/predict-image`  
 Upload an image and receive JSON bounding-box predictions.  
 ```bash
-curl -X POST "http://localhost:8080/predict-image"      -F "file=@sample.jpg"
+curl -X POST "http://localhost:8080/predict-image" -F "file=@sample.jpg"
 ```
 
 ### **3. Visualize Image**
 **POST** `/visualize-image`  
 Returns an annotated image (JPEG stream) with detected objects.  
 ```bash
-curl -X POST "http://localhost:8080/visualize-image"      -F "file=@sample.jpg" --output output.jpg
+curl -X POST "http://localhost:8080/visualize-image" -F "file=@sample.jpg" --output output.jpg
 ```
 
 ### **4. Live Stream**
@@ -112,7 +140,7 @@ View real-time detection from your webcam.
 Edit `app/config.py` to set default parameters:
 
 ```python
-DEVICE = "cuda" if torch.cuda.is_available()     else "mps" if torch.backends.mps.is_available() else "cpu"
+DEVICE = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
 NUM_THREADS = 4
 MODEL_PATH = "models/best_model.pth"
 SCORE_THRESH = 0.5
@@ -163,10 +191,9 @@ or grant camera permission:
 
 ---
 
-## 🧑‍💻 Author
+## 👨‍💻 Author
 **Glend Dale Ferrer**  
-📧 mgdferrer@tip.edu.ph 
-
+📧 mgdferrer@tip.edu.ph  
 
 ---
 
