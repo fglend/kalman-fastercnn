@@ -1,2 +1,4 @@
 venv/
 models/*.pth
+results/
+__pycache__/

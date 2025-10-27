@@ -17,6 +17,7 @@ from fastapi.templating import Jinja2Templates
 from fastapi import Request
 import json
 from datetime import datetime
+import threading
 
 # ============================================================
 # Initialization
@@ -117,9 +118,8 @@ def save_coco_format(image_bytes, detections, image_filename="captured.jpg"):
     coco_dir = os.path.join(RESULTS_DIR, "coco")
     os.makedirs(coco_dir, exist_ok=True)
 
-    from datetime import datetime
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    json_path = f"results/coco/{ts}.json"
+    json_path = os.path.join(coco_dir, f"{ts}.json")
 
     # Get image dimensions
     image = Image.open(io.BytesIO(image_bytes))
@@ -185,8 +185,10 @@ def predict_image(file: UploadFile = File(...)):
         tensor = preprocess_image(contents)
         if device.type != "cpu":
             tensor = tensor.to(device)
+
         outputs = model(tensor)[0]
         boxes, labels, scores = filter_predictions(outputs, settings.SCORE_THRESH)
+
         detections = [
             {
                 "x_min": float(b[0]),
@@ -199,15 +201,28 @@ def predict_image(file: UploadFile = File(...)):
             for b, l, s in zip(boxes, labels, scores)
         ]
 
-        # ✅ Save both image and detection results
-        save_analysis(contents, {"detections": detections, "num_detections": len(detections)})
-        save_coco_format(contents, {"detections": detections, "num_detections": len(detections)}, file.filename)
+        # ✅ Build the result payload
+        result_data = {
+            "detections": detections,
+            "num_detections": len(detections)
+        }
 
-        return {"detections": detections, "num_detections": len(detections)}
+        # ✅ Run saving in background thread
+        def async_save():
+            try:
+                save_analysis(contents, result_data)
+                save_coco_format(contents, result_data, file.filename)
+            except Exception as e:
+                print(f"⚠️ Async save error: {e}")
+
+        threading.Thread(target=async_save, daemon=True).start()
+
+        print(f"✅ {len(detections)} objects detected")
+        return result_data
+
     except Exception as e:
         print(f"❌ Prediction error: {e}")
         return {"detections": [], "num_detections": 0, "error": str(e)}
-
 # ============================================================
 # Visualize Image Endpoint
 # ============================================================
