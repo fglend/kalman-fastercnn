@@ -174,6 +174,7 @@ def save_coco_format(image_bytes, detections, image_filename="captured.jpg"):
 
     print(f"✅ COCO file saved: {json_path}")
 
+
 # ============================================================
 # Predict Single Image
 # ============================================================
@@ -201,13 +202,16 @@ def predict_image(file: UploadFile = File(...)):
             for b, l, s in zip(boxes, labels, scores)
         ]
 
-        # ✅ Build the result payload
+        # ✅ Always compute and save with num_detections
         result_data = {
             "detections": detections,
             "num_detections": len(detections)
         }
 
-        # ✅ Run saving in background thread
+        # save_analysis(contents, result_data)
+        # save_coco_format(contents, result_data, file.filename)
+
+             # ✅ Run saving in background thread
         def async_save():
             try:
                 save_analysis(contents, result_data)
@@ -223,6 +227,8 @@ def predict_image(file: UploadFile = File(...)):
     except Exception as e:
         print(f"❌ Prediction error: {e}")
         return {"detections": [], "num_detections": 0, "error": str(e)}
+    
+    
 # ============================================================
 # Visualize Image Endpoint
 # ============================================================

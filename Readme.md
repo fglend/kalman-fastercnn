@@ -1,7 +1,7 @@
-# 🚀 Faster R-CNN w/ Kalman-Filter API with Live Detection (FastAPI + PyTorch)
+# 🚀 Faster R-CNN w/ Kalman Filter API (FastAPI + PyTorch)
 
-A lightweight web API for **real-time object detection** using a trained Faster R-CNN w/ Kalman-Filter model.  
-Includes endpoints for image prediction, visualization, and live camera streaming—all optimized for smooth performance on both **Mac (M-series)** and **Windows**.
+A lightweight web API for **real-time object detection** using a trained **Faster R-CNN with Kalman Filter** model.  
+Includes endpoints for image prediction, visualization, and live camera streaming — optimized for smooth performance on both **macOS (M-series)** and **Windows**.
 
 ---
 
@@ -10,34 +10,42 @@ Includes endpoints for image prediction, visualization, and live camera streamin
 - **Image upload** detection endpoint (`/predict-image`)  
 - **Visualization endpoint** returning annotated images (`/visualize-image`)  
 - **Live camera streaming** (`/live`) with threaded inference  
-- Compatible with **CPU, CUDA**, and **Apple Silicon (MPS)** backends  
-- Docker-ready for quick deployment
+- **Automatic saving** of:
+  - 🖼️ Predicted images (`/results/images`)
+  - 📄 Detection JSON (`/results/json`)
+  - 📦 COCO-format annotations (`/results/coco`)
+- Compatible with **CPU**, **CUDA**, and **Apple Silicon (MPS)**  
+- Fully **Docker-ready** and works with or without attached storage volumes  
 
 ---
-## Trained Model
-URL: [Request Here](https://drive.google.com/file/d/1KC9LZ1u8av3O4lO-_VJ8r9P_2PHnzsLU/view?usp=drive_link)
+
+## 🧠 Trained Model
+📦 Model weights (Faster R-CNN + Kalman Filter)  
+🔗 [Request Access Here](https://drive.google.com/file/d/1KC9LZ1u8av3O4lO-_VJ8r9P_2PHnzsLU/view?usp=drive_link)
 
 ---
 
 ## 🖼️ System Sample
 
-This is hosted via [Local Tunnel](https://theboroer.github.io/localtunnel-www/) which uses local ip address as password. The password is located in the drive .txt
+Hosted via [LocalTunnel](https://theboroer.github.io/localtunnel-www/).  
+LocalTunnel uses your **local IP address** as a one-time password (see credentials in the shared Drive `.txt` file).
 
-Below is an example screenshot of the live detection interface:
-
-URL: [https://gd-live.loca.lt/](https://gd-live.loca.lt/) for Image/Video Analysis
+### 🔹 Image / Video Analysis  
+🔗 [https://gd-live.loca.lt/](https://gd-live.loca.lt/)
 
 <p align="center">
   <img src="/assets/1.png" alt="System Sample" width="600"/>
 </p>
 
-URL: [https://gd-live.loca.lt/live](https://gd-live.loca.lt/live) for live video analysis
+### 🔹 Live Detection  
+🔗 [https://gd-live.loca.lt/live](https://gd-live.loca.lt/live)
 
 <p align="center">
   <img src="/assets/2.png" alt="System Sample" width="600"/>
 </p>
 
-URL: [https://gd-live.loca.lt/docs](https://gd-live.loca.lt/docs) for api endpoints
+### 🔹 API Docs  
+🔗 [https://gd-live.loca.lt/docs](https://gd-live.loca.lt/docs)
 
 <p align="center">
   <img src="/assets/3.png" alt="System Sample" width="600"/>
@@ -47,7 +55,7 @@ URL: [https://gd-live.loca.lt/docs](https://gd-live.loca.lt/docs) for api endpoi
 
 ## 📦 Requirements
 
-Python 3.10+  
+Python 3.10+
 
 ### Dependencies
 ```bash
@@ -64,18 +72,18 @@ opencv-python==4.10.0.84
 
 ---
 
-## ⚙️ Installation (Local – Mac/Windows)
+## ⚙️ Installation (Local – Mac / Windows)
 
 ```bash
 # 1️⃣ Clone the repository
 git clone https://github.com/fglend/kalman-fastercnn.git
-cd fasterrcnn-api
+cd kalman-fastercnn
 
 # 2️⃣ Create a virtual environment
-python3 -m venv venv
-source venv/bin/activate      # macOS/Linux
-# OR
-venv\Scripts\activate         # Windows
+python -m venv venv
+venv\Scripts\activate       # Windows PowerShell  
+# or
+source venv/bin/activate    # macOS / Linux
 
 # 3️⃣ Install dependencies
 pip install -r requirements.txt
@@ -95,52 +103,82 @@ Then open:
 ```bash
 # Build image
 docker build -t fasterrcnn-api .
+```
 
-# Run container
+### 🧩 Run the Container
+```bash
+# Simple run
 docker run -p 8080:8080 fasterrcnn-api
 ```
 
-To mount your trained model:
+### 💾 Mount your model or results folder
 ```bash
-docker run -p 8080:8080 -v $(pwd)/models:/models fasterrcnn-api
+# macOS / Linux
+docker run -p 8080:8080 -v $(pwd)/models:/models -v $(pwd)/results:/results fasterrcnn-api
+
+# Windows PowerShell
+docker run -p 8080:8080 -v ${PWD}/models:/models -v ${PWD}/results:/results fasterrcnn-api
 ```
-> 🪟 On Windows PowerShell:
-> ```bash
-> docker run -p 8080:8080 -v ${PWD}/models:/models fasterrcnn-api
-> ```
+
+> The container will automatically detect `/models` and `/results`.  
+> If no volume is attached, it uses Docker’s internal storage (ephemeral).
+
+---
+
+## 🧩 Auto-Saving Behavior
+
+Whenever `/predict-image` or `/visualize-image` is called, the app automatically:
+1. Saves the **uploaded image** to `/results/images/`
+2. Writes a **detection JSON** file to `/results/json/`
+3. Generates a **COCO-format annotation** file to `/results/coco/`
+
+### Example:
+```
+✅ Saved: /results/images/20251027_031154.jpg  
+✅ Saved: /results/json/20251027_031154.json  
+✅ Saved: /results/coco/20251027_031154.json
+```
 
 ---
 
 ## 🔍 API Endpoints
 
-### **1. Health Check**
+### **1️⃣ Health Check**
 **GET** `/health`  
-Returns model device and server status.
+Returns the model’s current device and runtime info.
 
-### **2. Predict Image**
+---
+
+### **2️⃣ Predict Image**
 **POST** `/predict-image`  
-Upload an image and receive JSON bounding-box predictions.  
+Uploads an image and returns detections in JSON format.  
+Also saves predictions automatically.
+
 ```bash
 curl -X POST "http://localhost:8080/predict-image" -F "file=@sample.jpg"
 ```
 
-### **3. Visualize Image**
+---
+
+### **3️⃣ Visualize Image**
 **POST** `/visualize-image`  
-Returns an annotated image (JPEG stream) with detected objects.  
+Returns an annotated image (JPEG) showing all detections.
+
 ```bash
 curl -X POST "http://localhost:8080/visualize-image" -F "file=@sample.jpg" --output output.jpg
 ```
 
-### **4. Live Stream**
+---
+
+### **4️⃣ Live Stream**
 **GET** `/live`  
-View real-time detection from your webcam.
+Starts live camera detection (works on Chrome desktop or mobile devices on the same network).
 
 ---
 
-## 🧩 Configuration
+## ⚙️ Configuration
 
-Edit `app/config.py` to set default parameters:
-
+Edit `app/config.py` for environment and threshold setup:
 ```python
 DEVICE = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
 NUM_THREADS = 4
@@ -151,41 +189,42 @@ SCORE_THRESH = 0.5
 ---
 
 ## ⚡ Performance Tips
-
-- Use **MPS (Mac)** or **CUDA (Windows/Linux)** for faster inference.  
-- Reduce frame size → lower latency (`T.Resize((320, 320))`).  
-- Adjust frame skip in `generate_frames()` to control FPS vs speed.  
-- Close extra browser tabs during live stream for smooth output.
+- 🧮 Use **CUDA (NVIDIA)** or **MPS (Mac)** for faster inference  
+- 🖼️ Lower `T.Resize()` in preprocessing for better FPS  
+- ⚙️ Adjust frame skip in `generate_frames()` to balance accuracy vs speed  
+- 🚀 Close unused browser tabs while streaming to improve latency  
 
 ---
 
 ## 🧠 Notes for macOS Users
-
 If you see:
 ```
 [ WARN:0] VIDEOIO(V4L2:/dev/video0): can't open camera by index
 ```
-Replace camera index:
+Try changing:
 ```python
 cap = cv2.VideoCapture(1)
 ```
-or grant camera permission:
-> **System Settings → Privacy & Security → Camera → Allow Terminal / IDE access**
+Or enable camera permissions:
+> **System Settings → Privacy & Security → Camera → Allow Terminal / IDE**
 
 ---
 
 ## 📁 Project Structure
-
 ```
 .
 ├── app/
-│   ├── main.py              # FastAPI application
+│   ├── main.py              # FastAPI app
 │   ├── model.py             # Model loader
 │   ├── predict_utils.py     # Preprocessing & filtering
-│   ├── config.py            # App configuration
-│   └── ...
+│   ├── config.py            # Environment configuration
+│   └── templates/           # HTML UI templates
 ├── models/
 │   └── best_model.pth       # Trained weights
+├── results/
+│   ├── images/              # Saved predictions
+│   ├── json/                # Detection outputs
+│   └── coco/                # COCO annotations
 ├── requirements.txt
 ├── Dockerfile
 └── README.md
