@@ -248,6 +248,15 @@
                     <div class="file-info" id="imageFileName"></div>
                 </div>
 
+                <div class="camera-container" style="text-align:center; margin-bottom:20px;">
+                    <video id="camera" autoplay playsinline muted style="width:100%; max-width:500px; border-radius:10px; display:none;"></video>
+                    <canvas id="guideCanvas" style="position:absolute; left:0; right:0; margin:auto; max-width:500px; display:none;"></canvas>
+                    <div style="margin-top:10px;">
+                        <button id="toggleCameraBtn">📸 Capture from Camera</button>
+                        <button id="captureBtn" style="display:none;">🟢 Take Picture</button>
+                    </div>
+                </div>
+
                 <div class="controls">
                     <button id="analyzeImageBtn" disabled>Analyze Image</button>
                     <button id="clearImageBtn">Clear</button>
@@ -328,6 +337,62 @@
             const imageResults = document.getElementById('imageResults');
             const imageError = document.getElementById('imageError');
             let selectedImage = null;
+
+            // ============ CAMERA CAPTURE HANDLING ============
+            const camera = document.getElementById('camera');
+            const guideCanvas = document.getElementById('guideCanvas');
+            const gctx = guideCanvas.getContext('2d');
+            const toggleCameraBtn = document.getElementById('toggleCameraBtn');
+            const captureBtn = document.getElementById('captureBtn');
+            let cameraActive = false;
+            let stream = null;
+
+            toggleCameraBtn.addEventListener('click', async () => {
+                if (!cameraActive) {
+                    try {
+                        stream = await navigator.mediaDevices.getUserMedia({
+                            video: { facingMode: { ideal: 'environment' } }
+                        });
+                        camera.srcObject = stream;
+                        camera.style.display = 'block';
+                        guideCanvas.style.display = 'block';
+                        captureBtn.style.display = 'inline-block';
+                        drawGuides();
+                        cameraActive = true;
+                        toggleCameraBtn.textContent = '⏹ Stop Camera';
+                    } catch (e) {
+                        alert('Cannot access camera: ' + e.message);
+                    }
+                } else {
+                    stopCamera();
+                }
+            });
+
+            function stopCamera() {
+                if (stream) {
+                    stream.getTracks().forEach(track => track.stop());
+                }
+                camera.style.display = 'none';
+                guideCanvas.style.display = 'none';
+                captureBtn.style.display = 'none';
+                cameraActive = false;
+                toggleCameraBtn.textContent = '📸 Capture from Camera';
+            }
+
+            captureBtn.addEventListener('click', async () => {
+                const tempCanvas = document.createElement('canvas');
+                tempCanvas.width = camera.videoWidth;
+                tempCanvas.height = camera.videoHeight;
+                const ctx = tempCanvas.getContext('2d');
+                ctx.drawImage(camera, 0, 0, tempCanvas.width, tempCanvas.height);
+
+                tempCanvas.toBlob(async (blob) => {
+                    selectedImage = new File([blob], "captured.jpg", { type: "image/jpeg" });
+                    imageFileName.textContent = "📸 Captured image from camera";
+                    analyzeImageBtn.disabled = false;
+                    stopCamera();
+                }, "image/jpeg", 0.9);
+            });
 
             // Drag and drop for image
             imageUpload.addEventListener('dragover', (e) => {
@@ -511,6 +576,86 @@
                     console.error(e);
                 }
             }
+
+            function drawGuides() {
+                    guideCanvas.width = camera.clientWidth;
+                    guideCanvas.height = camera.clientHeight;
+
+                    const centerBox = {
+                        w: guideCanvas.width * 0.4,
+                        h: guideCanvas.height * 0.4,
+                    };
+                    centerBox.x = (guideCanvas.width - centerBox.w) / 2;
+                    centerBox.y = (guideCanvas.height - centerBox.h) / 2;
+
+                    const tempCanvas = document.createElement('canvas');
+                    const tempCtx = tempCanvas.getContext('2d');
+
+                    const draw = () => {
+                        gctx.clearRect(0, 0, guideCanvas.width, guideCanvas.height);
+
+                        // Rule of thirds grid lines
+                        gctx.strokeStyle = "rgba(255,255,255,0.3)";
+                        gctx.lineWidth = 1;
+                        for (let i = 1; i < 3; i++) {
+                            const x = (guideCanvas.width / 3) * i;
+                            const y = (guideCanvas.height / 3) * i;
+                            gctx.beginPath(); gctx.moveTo(x, 0); gctx.lineTo(x, guideCanvas.height); gctx.stroke();
+                            gctx.beginPath(); gctx.moveTo(0, y); gctx.lineTo(guideCanvas.width, y); gctx.stroke();
+                        }
+
+                        // Capture a low-res frame from the video for light analysis
+                        tempCanvas.width = 64;
+                        tempCanvas.height = 48;
+                        tempCtx.drawImage(camera, 0, 0, tempCanvas.width, tempCanvas.height);
+
+                        const frame = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
+                        const centerRegion = getCenterBrightness(frame);
+
+                        // Determine color based on brightness difference
+                        const isCentered = centerRegion > 0.25; // threshold for object contrast
+                        gctx.strokeStyle = isCentered ? "rgba(0,255,0,0.9)" : "rgba(230,57,70,0.9)";
+                        gctx.lineWidth = 3;
+                        gctx.strokeRect(centerBox.x, centerBox.y, centerBox.w, centerBox.h);
+
+                        // Optional hint text
+                        gctx.font = "18px Segoe UI";
+                        gctx.fillStyle = "rgba(255,255,255,0.8)";
+                        gctx.fillText(isCentered ? "✅ Ready to capture" : "Align object to center box", 20, 30);
+
+                        requestAnimationFrame(draw);
+                    };
+                    draw();
+                }
+
+                // Helper: get brightness contrast in the center region
+                function getCenterBrightness(frame) {
+                    const { data, width, height } = frame;
+                    const cx1 = Math.floor(width * 0.4);
+                    const cx2 = Math.floor(width * 0.6);
+                    const cy1 = Math.floor(height * 0.4);
+                    const cy2 = Math.floor(height * 0.6);
+
+                    let sumCenter = 0, sumOuter = 0, countCenter = 0, countOuter = 0;
+
+                    for (let y = 0; y < height; y++) {
+                        for (let x = 0; x < width; x++) {
+                            const i = (y * width + x) * 4;
+                            const brightness = (data[i] + data[i + 1] + data[i + 2]) / 3 / 255;
+                            const inCenter = (x >= cx1 && x <= cx2 && y >= cy1 && y <= cy2);
+                            if (inCenter) {
+                                sumCenter += brightness;
+                                countCenter++;
+                            } else {
+                                sumOuter += brightness;
+                                countOuter++;
+                            }
+                        }
+                    }
+                    const avgCenter = sumCenter / countCenter;
+                    const avgOuter = sumOuter / countOuter;
+                    return Math.abs(avgOuter - avgCenter); // brightness contrast
+                }
         </script>
     </body>
     </html>
