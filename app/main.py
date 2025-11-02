@@ -60,7 +60,7 @@ def startup_event():
 def inference_worker():
     transform = T.Compose([
         T.ToTensor(),
-        T.Resize((320, 320)),
+        T.Resize((512, 512)),
         T.Normalize(mean=[0.485, 0.456, 0.406],
                     std=[0.229, 0.224, 0.225])
     ])
@@ -350,7 +350,7 @@ def analyze_video(file: UploadFile = File(...)):
 
         transform = T.Compose([
             T.ToTensor(),
-            T.Resize((320, 320)),
+            T.Resize((512, 512)),
             T.Normalize(mean=[0.485, 0.456, 0.406],
                         std=[0.229, 0.224, 0.225])
         ])
