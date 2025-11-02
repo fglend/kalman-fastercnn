@@ -217,6 +217,29 @@
         .btn-orange:hover {
             background: linear-gradient(135deg, #f57c00, #e65100);
         }
+        /* ✅ Add progress bar style */
+        #progressContainer {
+            margin-top:20px;
+            display:none;
+        }
+        #progressBarWrapper {
+            background:rgba(255,255,255,0.1);
+            border-radius:10px;
+            height:20px;
+            overflow:hidden;
+        }
+        #progressBar {
+            width:0%;
+            height:100%;
+            background:#4caf50;
+            transition:width 0.5s ease;
+        }
+        #progressText {
+            text-align:center;
+            margin-top:8px;
+            color:#90ee90;
+            font-weight:bold;
+        }
     </style>
 </head>
 <body>
@@ -284,13 +307,13 @@
             <div id="imageError"></div>
         </div>
 
-        <!-- VIDEO TAB -->
+        <!-- ================= VIDEO TAB ================= -->
         <div id="video" class="tab-content">
             <div class="upload-section" data-upload="video">
                 <input type="file" id="videoInput" accept="video/*">
                 <label for="videoInput" class="upload-label">
                     Click to upload or drag & drop<br>
-                    <span style="font-size: 12px; color: #666;">Supported: MP4, AVI, MOV, MKV</span>
+                    <span style="font-size:12px;color:#666;">Supported: MP4, AVI, MOV, MKV</span>
                 </label>
                 <div class="file-info" id="videoFileName"></div>
             </div>
@@ -303,9 +326,17 @@
             <div class="loading" id="videoLoading">
                 <div class="spinner"></div>
                 <p>Processing video... This may take a while</p>
+
+                <!-- ✅ Progress bar -->
+                <div id="progressContainer">
+                    <div id="progressBarWrapper">
+                        <div id="progressBar"></div>
+                    </div>
+                    <p id="progressText">Processing: 0%</p>
+                </div>
             </div>
 
-            <div id="videoResult" style="display: none;">
+            <div id="videoResult" style="display:none;">
                 <div class="message success" id="videoSuccess"></div>
                 <button class="download-btn" id="downloadVideoBtn">Download Analyzed Video</button>
             </div>
@@ -635,36 +666,61 @@
             hide(videoEls.result);
             clearMessage(videoEls.error);
 
+            const progressContainer = $('progressContainer');
+            const progressBar = $('progressBar');
+            const progressText = $('progressText');
+            show(progressContainer);
+
             const formData = new FormData();
             formData.append('file', state.video.file);
 
             try {
-                const res = await fetch('/analyze-video', { method: 'POST', body: formData });
-                
-                if (!res.ok) {
-                    const errData = await res.json();
-                    throw new Error(errData.error || 'Video analysis failed');
-                }
+                // 1️⃣ Start job
+                const startRes = await fetch('/start-analyze', { method: 'POST', body: formData });
+                const { job_id } = await startRes.json();
+                if (!job_id) throw new Error('Failed to start analysis');
 
-                const blob = await res.blob();
-                const url = URL.createObjectURL(blob);
+                // 2️⃣ Poll progress
+                const poll = setInterval(async () => {
+                    const res = await fetch(`/progress/${job_id}`);
+                    const data = await res.json();
 
-                hide(videoEls.loading);
-                videoEls.success.textContent = '✅ Video analyzed successfully!';
-                videoEls.downloadBtn.onclick = () => {
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = 'analyzed_' + state.video.file.name;
-                    a.click();
-                };
-                show(videoEls.result);
+                    progressBar.style.width = `${data.progress}%`;
+                    progressText.textContent = `Processing: ${data.progress.toFixed(1)}%`;
+
+                    if (data.status === 'error') {
+                        clearInterval(poll);
+                        hide(progressContainer);
+                        hide(videoEls.loading);
+                        showMessage(videoEls.error, `Error: ${data.error}`);
+                    }
+
+                    if (data.status === 'done') {
+                        clearInterval(poll);
+                        hide(progressContainer);
+                        hide(videoEls.loading);
+
+                        // 3️⃣ Download result
+                        const videoRes = await fetch(`/result/${job_id}`);
+                        const blob = await videoRes.blob();
+                        const url = URL.createObjectURL(blob);
+
+                        videoEls.success.innerHTML = `✅ Video analyzed successfully!`;
+                        videoEls.downloadBtn.onclick = () => {
+                            const a = document.createElement('a');
+                            a.href = url;
+                            a.download = 'analyzed_' + state.video.file.name;
+                            a.click();
+                        };
+                        show(videoEls.result);
+                    }
+                }, 1500);
             } catch (e) {
                 hide(videoEls.loading);
+                hide(progressContainer);
                 showMessage(videoEls.error, `Error: ${e.message}`);
-                console.error(e);
             }
         };
-
         // ============ EVENT LISTENERS ============
         
         // Tabs are already set up above

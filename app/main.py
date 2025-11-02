@@ -18,6 +18,11 @@ from fastapi import Request
 import json
 from datetime import datetime
 import threading
+import uuid
+import time
+from threading import Thread
+from fastapi import BackgroundTasks
+from fastapi.responses import JSONResponse
 
 # ============================================================
 # Initialization
@@ -87,6 +92,96 @@ def inference_worker():
 @app.get("/health")
 def health():
     return {"status": "ok", "device": str(device)}
+
+
+# =========================
+# JOB STORAGE
+# =========================
+jobs = {}  # job_id -> {"status": str, "progress": float, "output": str, "error": str}
+
+def process_video_job(job_id, video_path, output_path):
+    import cv2, torch, torchvision.transforms as T
+    try:
+        jobs[job_id]["status"] = "processing"
+        cap = cv2.VideoCapture(video_path)
+        total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        fps = cap.get(cv2.CAP_PROP_FPS) or 24.0
+        w, h = int(cap.get(3)), int(cap.get(4))
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+        out = cv2.VideoWriter(output_path, fourcc, fps, (w, h))
+
+        transform = T.Compose([
+            T.ToTensor(),
+            T.Resize((512, 512)),
+            T.Normalize(mean=[0.485, 0.456, 0.406],
+                        std=[0.229, 0.224, 0.225])
+        ])
+
+        frame_i = 0
+        skip = 2
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                break
+            frame_i += 1
+            if frame_i % skip != 0:
+                continue
+
+            img_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            tensor = transform(img_rgb).unsqueeze(0).to(device, non_blocking=True)
+            with torch.no_grad():
+                outputs = model(tensor)[0]
+
+            keep = outputs["scores"] >= settings.SCORE_THRESH
+            boxes = outputs["boxes"][keep].cpu().numpy()
+            labels = outputs["labels"][keep].cpu().numpy()
+            scores = outputs["scores"][keep].cpu().numpy()
+            sx, sy = w/512, h/512
+            for b, l, s in zip(boxes, labels, scores):
+                x1, y1, x2, y2 = map(int, [b[0]*sx, b[1]*sy, b[2]*sx, b[3]*sy])
+                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), 2)
+                cv2.putText(frame, f"{int(l)}:{s:.2f}", (x1, max(20, y1-10)),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 1)
+            out.write(frame)
+
+            if frame_i % 10 == 0:
+                jobs[job_id]["progress"] = round((frame_i / total) * 100, 2)
+
+        cap.release(); out.release()
+        jobs[job_id].update({"status": "done", "progress": 100.0})
+    except Exception as e:
+        jobs[job_id].update({"status": "error", "error": str(e)})
+
+
+@app.post("/start-analyze")
+def start_analyze(file: UploadFile = File(...)):
+    tmp_in = tempfile.NamedTemporaryFile(delete=False, suffix="." + file.filename.split(".")[-1])
+    tmp_in.write(file.file.read())
+    tmp_in.close()
+    tmp_out = tempfile.mktemp(suffix=".mp4")
+
+    job_id = str(uuid.uuid4())
+    jobs[job_id] = {"status": "queued", "progress": 0.0, "output": tmp_out, "error": ""}
+
+    thread = Thread(target=process_video_job, args=(job_id, tmp_in.name, tmp_out), daemon=True)
+    thread.start()
+    return {"job_id": job_id}
+
+
+@app.get("/progress/{job_id}")
+def get_progress(job_id: str):
+    job = jobs.get(job_id)
+    if not job:
+        return JSONResponse(content={"error": "Job not found"}, status_code=404)
+    return {"status": job["status"], "progress": job["progress"], "error": job["error"]}
+
+
+@app.get("/result/{job_id}")
+def get_result(job_id: str):
+    job = jobs.get(job_id)
+    if not job or job["status"] != "done":
+        return JSONResponse(content={"error": "Job not ready"}, status_code=400)
+    return StreamingResponse(open(job["output"], "rb"), media_type="video/mp4")
 
 # ============================================================
 # Save Image and Json File After Analysis
@@ -344,26 +439,37 @@ def analyze_video(file: UploadFile = File(...)):
         w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         fps = cap.get(cv2.CAP_PROP_FPS) or 24.0
-        
+
+        # ✅ Optimize for output
         fourcc = cv2.VideoWriter_fourcc(*'mp4v')
         out = cv2.VideoWriter(tmp_out, fourcc, fps, (w, h))
 
+        # ✅ Define transform once
         transform = T.Compose([
             T.ToTensor(),
-            T.Resize((512, 512)),
+            T.Resize((512, 512)),  # match training
             T.Normalize(mean=[0.485, 0.456, 0.406],
                         std=[0.229, 0.224, 0.225])
         ])
 
         frame_idx = 0
-        while cap.isOpened():
+        skip_frames = 2  # ✅ skip every other frame for speed (~2× faster)
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        print(f"🎥 Processing {total_frames} frames (skipping {skip_frames-1} of each {skip_frames})")
+
+        while True:
             ret, frame = cap.read()
             if not ret:
                 break
-            frame_idx += 1
 
+            frame_idx += 1
+            if frame_idx % skip_frames != 0:
+                continue  # ✅ skip frames to reduce load
+
+            # ✅ Resize to smaller copy for processing, keep original for draw
             img_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            tensor = transform(img_rgb).unsqueeze(0).to(device)
+            tensor = transform(img_rgb).unsqueeze(0).to(device, non_blocking=True)
+
             with torch.no_grad():
                 outputs = model(tensor)[0]
 
@@ -372,27 +478,31 @@ def analyze_video(file: UploadFile = File(...)):
             labels = outputs["labels"][keep].cpu().numpy()
             scores = outputs["scores"][keep].cpu().numpy()
 
+            # ✅ Scale boxes back to original size
+            scale_x = w / 512
+            scale_y = h / 512
             for b, l, s in zip(boxes, labels, scores):
-                x1, y1, x2, y2 = map(int, b)
+                x1, y1, x2, y2 = (int(b[0]*scale_x), int(b[1]*scale_y),
+                                  int(b[2]*scale_x), int(b[3]*scale_y))
                 cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), 2)
                 cv2.putText(frame, f"{int(l)}:{s:.2f}", (x1, max(20, y1 - 10)),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 1)
 
             out.write(frame)
-            
-            if frame_idx % 30 == 0:
-                print(f"Processing frame {frame_idx}...")
+
+            # ✅ Progress print every 60 processed frames
+            if frame_idx % (60 * skip_frames) == 0:
+                print(f"Processed {frame_idx}/{total_frames} frames...")
 
         print(f"✅ Processed {frame_idx} frames successfully")
-        
         cap.release()
         out.release()
-        
         return StreamingResponse(open(tmp_out, "rb"), media_type="video/mp4")
-    
+
     except Exception as e:
         print(f"❌ Video analysis error: {e}")
         return {"error": str(e)}
+
     finally:
         if cap:
             cap.release()

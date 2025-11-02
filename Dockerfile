@@ -48,7 +48,7 @@ EXPOSE 8080
 # -------------------------------
 # 🏃‍♂️ Run server and LocalTunnel
 # -------------------------------
-CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port 8080 & sleep 5 && lt --port 8080 --subdomain gd-live"]
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port 8080 --timeout-keep-alive 600 & sleep 5 && lt --port 8080 --subdomain gd-live"]
 
 # -------------------------------
 # ❤️ Healthcheck (optional)
