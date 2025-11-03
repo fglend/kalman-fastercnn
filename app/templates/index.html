@@ -529,8 +529,8 @@
     </div>
 
     <!-- ✅ MODAL FOR VIEWING FULL IMAGE -->
-    <div id="imageModal" class="modal">
-        <span class="modal-close">&times;</span>
+    <div id="imageModal" class="modal" onclick="if(event.target.id==='imageModal') closeModal()">
+        <span class="modal-close" onclick="closeModal()">&times;</span>
         <div class="modal-content">
             <img id="modalImage" class="modal-image" alt="Full view">
             <div class="modal-info">
@@ -1096,7 +1096,20 @@
             }
         };
 
-        const openVideoModal = async (timestamp) => {
+        const closeModal = () => {
+            const modal = $('imageModal');
+            modal.style.display = 'none';
+            
+            // Clean up video player if exists
+            const videoContainer = document.getElementById('videoPlayerContainer');
+            if (videoContainer) {
+                videoContainer.remove();
+            }
+            $('modalImage').style.display = 'block';
+        };
+
+        // Make closeModal global so onclick can access it
+        window.closeModal = closeModal;
             const modal = $('imageModal');
             const modalImage = $('modalImage');
             const modalTitle = $('modalTitle');
@@ -1248,11 +1261,26 @@
 
         // Gallery events
         $('refreshGalleryBtn').addEventListener('click', loadGallery);
+        
+        $('showImagesBtn').addEventListener('click', () => {
+            state.gallery.mode = 'images';
+            $('showImagesBtn').classList.add('active');
+            $('showVideosBtn').classList.remove('active');
+            loadGallery();
+        });
+        
+        $('showVideosBtn').addEventListener('click', () => {
+            state.gallery.mode = 'videos';
+            $('showVideosBtn').classList.add('active');
+            $('showImagesBtn').classList.remove('active');
+            loadGallery();
+        });
 
-        // Modal events
-        $('imageModal').querySelector('.modal-close').addEventListener('click', closeModal);
-        $('imageModal').addEventListener('click', (e) => {
-            if (e.target.id === 'imageModal') closeModal();
+        // Modal keyboard shortcut (ESC to close)
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && $('imageModal').style.display === 'block') {
+                closeModal();
+            }
         });
     </script>
 </body>
