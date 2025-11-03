@@ -422,6 +422,7 @@ def video_feed():
 # ============================================================
 @app.post("/analyze-video")
 def analyze_video(file: UploadFile = File(...)):
+    
     allowed_ext = (".mp4", ".avi", ".mov", ".mkv")
     if not any(file.filename.lower().endswith(ext) for ext in allowed_ext):
         return {"error": "Unsupported file type. Allowed: .mp4, .avi, .mov, .mkv"}
@@ -514,3 +515,150 @@ def analyze_video(file: UploadFile = File(...)):
             os.unlink(tmp_in.name)
         except:
             pass
+
+# ============================================================
+# Gallery Endpoints
+# ============================================================
+
+@app.get("/gallery/list")
+def list_gallery():
+    """List all saved detections with metadata."""
+    try:
+        json_dir = os.path.join(RESULTS_DIR, "json")
+        if not os.path.exists(json_dir):
+            return {"items": []}
+        
+        items = []
+        for filename in os.listdir(json_dir):
+            if filename.endswith(".json"):
+                timestamp = filename.replace(".json", "")
+                json_path = os.path.join(json_dir, filename)
+                
+                try:
+                    with open(json_path, "r") as f:
+                        data = json.load(f)
+                    
+                    items.append({
+                        "timestamp": timestamp,
+                        "num_detections": data.get("num_detections", 0)
+                    })
+                except Exception as e:
+                    print(f"⚠️ Error reading {filename}: {e}")
+        
+        # Sort by timestamp (newest first)
+        items.sort(key=lambda x: x["timestamp"], reverse=True)
+        return {"items": items}
+    
+    except Exception as e:
+        print(f"❌ Gallery list error: {e}")
+        return {"items": [], "error": str(e)}
+
+
+@app.get("/gallery/image/{timestamp}")
+def get_gallery_image(timestamp: str):
+    """Get original image by timestamp."""
+    try:
+        img_path = os.path.join(RESULTS_DIR, "images", f"{timestamp}.jpg")
+        if not os.path.exists(img_path):
+            return JSONResponse(content={"error": "Image not found"}, status_code=404)
+        
+        return StreamingResponse(open(img_path, "rb"), media_type="image/jpeg")
+    except Exception as e:
+        print(f"❌ Error loading image: {e}")
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
+
+@app.get("/gallery/visualize/{timestamp}")
+def visualize_gallery_image(timestamp: str):
+    """Generate visualized image with bounding boxes on-the-fly."""
+    try:
+        img_path = os.path.join(RESULTS_DIR, "images", f"{timestamp}.jpg")
+        json_path = os.path.join(RESULTS_DIR, "json", f"{timestamp}.json")
+        
+        if not os.path.exists(img_path) or not os.path.exists(json_path):
+            return JSONResponse(content={"error": "Files not found"}, status_code=404)
+        
+        # Load image
+        image = Image.open(img_path).convert("RGB")
+        draw = ImageDraw.Draw(image)
+        font = ImageFont.load_default()
+        
+        # Load detections
+        with open(json_path, "r") as f:
+            data = json.load(f)
+        
+        # Draw bounding boxes
+        for det in data.get("detections", []):
+            x_min = det["x_min"]
+            y_min = det["y_min"]
+            x_max = det["x_max"]
+            y_max = det["y_max"]
+            score = det["score"]
+            label_id = det["label_id"]
+            
+            draw.rectangle([x_min, y_min, x_max, y_max], outline="red", width=3)
+            draw.text((x_min, max(y_min - 10, 0)),
+                      f"ID:{label_id} | {score:.2f}", fill="yellow", font=font)
+        
+        # Return as JPEG
+        img_bytes = io.BytesIO()
+        image.save(img_bytes, format="JPEG", quality=95)
+        img_bytes.seek(0)
+        
+        return StreamingResponse(img_bytes, media_type="image/jpeg")
+    
+    except Exception as e:
+        print(f"❌ Visualization error: {e}")
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
+
+@app.get("/gallery/json/{timestamp}")
+def get_gallery_json(timestamp: str):
+    """Get detection JSON data by timestamp."""
+    try:
+        json_path = os.path.join(RESULTS_DIR, "json", f"{timestamp}.json")
+        if not os.path.exists(json_path):
+            return JSONResponse(content={"error": "JSON not found"}, status_code=404)
+        
+        with open(json_path, "r") as f:
+            data = json.load(f)
+        
+        return data
+    except Exception as e:
+        print(f"❌ Error loading JSON: {e}")
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
+
+@app.delete("/gallery/delete/{timestamp}")
+def delete_gallery_item(timestamp: str):
+    """Delete a gallery item (image, json, and coco files)."""
+    try:
+        deleted = []
+        
+        # Delete image
+        img_path = os.path.join(RESULTS_DIR, "images", f"{timestamp}.jpg")
+        if os.path.exists(img_path):
+            os.remove(img_path)
+            deleted.append("image")
+        
+        # Delete JSON
+        json_path = os.path.join(RESULTS_DIR, "json", f"{timestamp}.json")
+        if os.path.exists(json_path):
+            os.remove(json_path)
+            deleted.append("json")
+        
+        # Delete COCO
+        coco_path = os.path.join(RESULTS_DIR, "coco", f"{timestamp}.json")
+        if os.path.exists(coco_path):
+            os.remove(coco_path)
+            deleted.append("coco")
+        
+        if deleted:
+            print(f"✅ Deleted {timestamp}: {', '.join(deleted)}")
+            return {"success": True, "deleted": deleted}
+        else:
+            return JSONResponse(content={"error": "Item not found"}, status_code=404)
+    
+    except Exception as e:
+        print(f"❌ Delete error: {e}")
+        return JSONResponse(content={"error": str(e)}, status_code=500)
