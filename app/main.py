@@ -112,25 +112,31 @@ def process_video_job(job_id, video_path, output_path):
 
         transform = T.Compose([
             T.ToTensor(),
-            T.Resize((512, 512)),
+            T.Resize((384, 384)),  # ✅ Optimized size
             T.Normalize(mean=[0.485, 0.456, 0.406],
                         std=[0.229, 0.224, 0.225])
         ])
 
         frame_i = 0
-        skip = 2
+        skip = 5  # ✅ Increased for speed
+        detections_summary = []  # ✅ Track detections
+
         while True:
             ret, frame = cap.read()
             if not ret:
                 break
             frame_i += 1
             if frame_i % skip != 0:
+                out.write(frame)  # Write unprocessed frames
                 continue
 
             img_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             tensor = transform(img_rgb).unsqueeze(0).to(device, non_blocking=True)
+            
+            # ✅ FP16 for GPU
             if device.type == "cuda":
-                tensor = tensor.half()  # Convert input to FP16
+                tensor = tensor.half()
+            
             with torch.no_grad():
                 outputs = model(tensor)[0]
 
@@ -138,7 +144,15 @@ def process_video_job(job_id, video_path, output_path):
             boxes = outputs["boxes"][keep].cpu().numpy()
             labels = outputs["labels"][keep].cpu().numpy()
             scores = outputs["scores"][keep].cpu().numpy()
-            sx, sy = w/512, h/512
+            
+            # ✅ Track detection count
+            if len(boxes) > 0:
+                detections_summary.append({
+                    "frame": frame_i,
+                    "count": len(boxes)
+                })
+            
+            sx, sy = w/384, h/384  # ✅ Updated scale
             for b, l, s in zip(boxes, labels, scores):
                 x1, y1, x2, y2 = map(int, [b[0]*sx, b[1]*sy, b[2]*sx, b[3]*sy])
                 cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), 2)
@@ -149,11 +163,50 @@ def process_video_job(job_id, video_path, output_path):
             if frame_i % 10 == 0:
                 jobs[job_id]["progress"] = round((frame_i / total) * 100, 2)
 
-        cap.release(); out.release()
-        jobs[job_id].update({"status": "done", "progress": 100.0})
+        cap.release()
+        out.release()
+        
+        # ✅ Save to permanent storage
+        video_dir = os.path.join(RESULTS_DIR, "videos")
+        os.makedirs(video_dir, exist_ok=True)
+        
+        from datetime import datetime
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        permanent_path = os.path.join(video_dir, f"{ts}.mp4")
+        
+        # Move temp file to permanent location
+        import shutil
+        shutil.move(output_path, permanent_path)
+        
+        # ✅ Save metadata
+        video_json_dir = os.path.join(RESULTS_DIR, "videos_json")
+        os.makedirs(video_json_dir, exist_ok=True)
+        
+        metadata = {
+            "timestamp": ts,
+            "total_frames": total,
+            "processed_frames": frame_i,
+            "fps": fps,
+            "width": w,
+            "height": h,
+            "total_detections": sum(d["count"] for d in detections_summary),
+            "frames_with_detections": len(detections_summary),
+            "detection_summary": detections_summary[:100]  # First 100 frames
+        }
+        
+        with open(os.path.join(video_json_dir, f"{ts}.json"), "w") as f:
+            json.dump(metadata, f, indent=2)
+        
+        print(f"✅ Video saved: {permanent_path}")
+        jobs[job_id].update({
+            "status": "done", 
+            "progress": 100.0, 
+            "output": permanent_path,
+            "timestamp": ts  # ✅ Add timestamp
+        })
+        
     except Exception as e:
         jobs[job_id].update({"status": "error", "error": str(e)})
-
 
 @app.post("/start-analyze")
 def start_analyze(file: UploadFile = File(...)):
@@ -180,6 +233,15 @@ def get_progress(job_id: str):
 
 @app.get("/result/{job_id}")
 def get_result(job_id: str):
+    job = jobs.get(job_id)
+    if not job or job["status"] != "done":
+        return JSONResponse(content={"error": "Job not ready"}, status_code=400)
+    
+    # ✅ Add timestamp to response headers
+    response = StreamingResponse(open(job["output"], "rb"), media_type="video/mp4")
+    if "timestamp" in job:
+        response.headers["X-Video-Timestamp"] = job["timestamp"]
+    return response
     job = jobs.get(job_id)
     if not job or job["status"] != "done":
         return JSONResponse(content={"error": "Job not ready"}, status_code=400)
@@ -658,6 +720,132 @@ def delete_gallery_item(timestamp: str):
             return {"success": True, "deleted": deleted}
         else:
             return JSONResponse(content={"error": "Item not found"}, status_code=404)
+    
+    except Exception as e:
+        print(f"❌ Delete error: {e}")
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+    
+# ============================================================
+# Video Gallery Endpoints
+# ============================================================
+@app.get("/gallery/videos/list")
+def list_video_gallery():
+    """List all saved analyzed videos."""
+    try:
+        video_json_dir = os.path.join(RESULTS_DIR, "videos_json")
+        if not os.path.exists(video_json_dir):
+            return {"items": []}
+        
+        items = []
+        for filename in os.listdir(video_json_dir):
+            if filename.endswith(".json"):
+                timestamp = filename.replace(".json", "")
+                json_path = os.path.join(video_json_dir, filename)
+                
+                try:
+                    with open(json_path, "r") as f:
+                        data = json.load(f)
+                    
+                    items.append({
+                        "timestamp": timestamp,
+                        "total_detections": data.get("total_detections", 0),
+                        "frames_with_detections": data.get("frames_with_detections", 0),
+                        "total_frames": data.get("total_frames", 0),
+                        "fps": data.get("fps", 0),
+                        "duration": round(data.get("total_frames", 0) / max(data.get("fps", 1), 1), 1)
+                    })
+                except Exception as e:
+                    print(f"⚠️ Error reading {filename}: {e}")
+        
+        items.sort(key=lambda x: x["timestamp"], reverse=True)
+        return {"items": items}
+    
+    except Exception as e:
+        print(f"❌ Video gallery list error: {e}")
+        return {"items": [], "error": str(e)}
+
+
+@app.get("/gallery/videos/stream/{timestamp}")
+def stream_gallery_video(timestamp: str):
+    """Stream analyzed video by timestamp."""
+    try:
+        video_path = os.path.join(RESULTS_DIR, "videos", f"{timestamp}.mp4")
+        if not os.path.exists(video_path):
+            return JSONResponse(content={"error": "Video not found"}, status_code=404)
+        
+        return StreamingResponse(open(video_path, "rb"), media_type="video/mp4")
+    except Exception as e:
+        print(f"❌ Error streaming video: {e}")
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
+
+@app.get("/gallery/videos/thumbnail/{timestamp}")
+def get_video_thumbnail(timestamp: str):
+    """Generate thumbnail for video (first frame with detections)."""
+    try:
+        video_path = os.path.join(RESULTS_DIR, "videos", f"{timestamp}.mp4")
+        if not os.path.exists(video_path):
+            return JSONResponse(content={"error": "Video not found"}, status_code=404)
+        
+        cap = cv2.VideoCapture(video_path)
+        ret, frame = cap.read()
+        cap.release()
+        
+        if not ret:
+            return JSONResponse(content={"error": "Cannot read video"}, status_code=500)
+        
+        # Resize for thumbnail
+        h, w = frame.shape[:2]
+        thumb_w = 400
+        thumb_h = int(h * (thumb_w / w))
+        frame = cv2.resize(frame, (thumb_w, thumb_h))
+        
+        _, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
+        return StreamingResponse(io.BytesIO(buffer.tobytes()), media_type="image/jpeg")
+    
+    except Exception as e:
+        print(f"❌ Thumbnail error: {e}")
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
+
+@app.get("/gallery/videos/json/{timestamp}")
+def get_video_metadata(timestamp: str):
+    """Get video metadata."""
+    try:
+        json_path = os.path.join(RESULTS_DIR, "videos_json", f"{timestamp}.json")
+        if not os.path.exists(json_path):
+            return JSONResponse(content={"error": "Metadata not found"}, status_code=404)
+        
+        with open(json_path, "r") as f:
+            data = json.load(f)
+        
+        return data
+    except Exception as e:
+        print(f"❌ Error loading metadata: {e}")
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
+
+@app.delete("/gallery/videos/delete/{timestamp}")
+def delete_video_item(timestamp: str):
+    """Delete a video gallery item."""
+    try:
+        deleted = []
+        
+        video_path = os.path.join(RESULTS_DIR, "videos", f"{timestamp}.mp4")
+        if os.path.exists(video_path):
+            os.remove(video_path)
+            deleted.append("video")
+        
+        json_path = os.path.join(RESULTS_DIR, "videos_json", f"{timestamp}.json")
+        if os.path.exists(json_path):
+            os.remove(json_path)
+            deleted.append("json")
+        
+        if deleted:
+            print(f"✅ Deleted video {timestamp}")
+            return {"success": True, "deleted": deleted}
+        else:
+            return JSONResponse(content={"error": "Video not found"}, status_code=404)
     
     except Exception as e:
         print(f"❌ Delete error: {e}")

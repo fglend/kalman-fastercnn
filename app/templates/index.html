@@ -504,7 +504,9 @@
         <div id="gallery" class="tab-content">
             <div class="gallery-header">
                 <h2 style="color: #e63946; margin: 0;">🖼️ Saved Detections</h2>
-                <div style="display: flex; gap: 10px;">
+                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                    <button id="showImagesBtn" class="tab-btn active">📷 Images</button>
+                    <button id="showVideosBtn" class="tab-btn">🎬 Videos</button>
                     <button id="refreshGalleryBtn" class="btn-orange">🔄 Refresh</button>
                 </div>
             </div>
@@ -558,7 +560,8 @@
                 resultBlob: null
             },
             gallery: {
-                items: []
+                items: [],
+                mode: 'images' // 'images' or 'videos'
             }
         };
 
@@ -909,6 +912,14 @@
 
         // ============ GALLERY FUNCTIONS ============
         const loadGallery = async () => {
+            if (state.gallery.mode === 'images') {
+                await loadImageGallery();
+            } else {
+                await loadVideoGallery();
+            }
+        };
+
+        const loadImageGallery = async () => {
             const galleryContainer = $('galleryContainer');
             const galleryLoading = $('galleryLoading');
             const galleryError = $('galleryError');
@@ -926,7 +937,7 @@
                     galleryContainer.innerHTML = `
                         <div class="empty-gallery">
                             <div class="empty-gallery-icon">📷</div>
-                            <h3>No saved detections yet</h3>
+                            <h3>No saved images yet</h3>
                             <p>Analyze some images to see them here!</p>
                         </div>
                     `;
@@ -934,14 +945,47 @@
                 }
 
                 state.gallery.items = data.items;
-                renderGallery(data.items);
+                renderImageGallery(data.items);
             } catch (e) {
                 hide(galleryLoading);
                 showMessage(galleryError, `Failed to load gallery: ${e.message}`);
             }
         };
 
-        const renderGallery = (items) => {
+        const loadVideoGallery = async () => {
+            const galleryContainer = $('galleryContainer');
+            const galleryLoading = $('galleryLoading');
+            const galleryError = $('galleryError');
+
+            show(galleryLoading);
+            clearMessage(galleryError);
+
+            try {
+                const res = await fetch('/gallery/videos/list');
+                const data = await res.json();
+
+                hide(galleryLoading);
+
+                if (!data.items || data.items.length === 0) {
+                    galleryContainer.innerHTML = `
+                        <div class="empty-gallery">
+                            <div class="empty-gallery-icon">🎬</div>
+                            <h3>No saved videos yet</h3>
+                            <p>Analyze some videos to see them here!</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                state.gallery.items = data.items;
+                renderVideoGallery(data.items);
+            } catch (e) {
+                hide(galleryLoading);
+                showMessage(galleryError, `Failed to load video gallery: ${e.message}`);
+            }
+        };
+
+        const renderImageGallery = (items) => {
             const galleryContainer = $('galleryContainer');
             
             galleryContainer.innerHTML = `
@@ -960,6 +1004,39 @@
                                 </div>
                                 <div class="gallery-detections">
                                     ${item.num_detections} object${item.num_detections !== 1 ? 's' : ''} detected
+                                </div>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        };
+
+        const renderVideoGallery = (items) => {
+            const galleryContainer = $('galleryContainer');
+            
+            galleryContainer.innerHTML = `
+                <div class="gallery-grid">
+                    ${items.map(item => `
+                        <div class="gallery-item" onclick="openVideoModal('${item.timestamp}')">
+                            <img class="gallery-image" 
+                                 src="/gallery/videos/thumbnail/${item.timestamp}" 
+                                 alt="Video ${item.timestamp}"
+                                 loading="lazy"
+                                 style="position:relative;">
+                            <div style="position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); 
+                                        background:rgba(0,0,0,0.7); border-radius:50%; width:60px; height:60px; 
+                                        display:flex; align-items:center; justify-content:center; pointer-events:none;">
+                                <span style="font-size:30px;">▶️</span>
+                            </div>
+                            <div class="gallery-info">
+                                <h4>${formatTimestamp(item.timestamp)}</h4>
+                                <div class="gallery-meta">
+                                    <span>⏱️ ${item.duration}s</span>
+                                    <span>🎞️ ${item.total_frames} frames</span>
+                                </div>
+                                <div class="gallery-detections">
+                                    ${item.total_detections} total detections
                                 </div>
                             </div>
                         </div>
@@ -1019,8 +1096,68 @@
             }
         };
 
-        const closeModal = () => {
-            $('imageModal').style.display = 'none';
+        const openVideoModal = async (timestamp) => {
+            const modal = $('imageModal');
+            const modalImage = $('modalImage');
+            const modalTitle = $('modalTitle');
+            const modalTimestamp = $('modalTimestamp');
+            const modalDetCount = $('modalDetCount');
+            const modalDetections = $('modalDetections');
+
+            try {
+                // Replace image with video player
+                const videoHTML = `
+                    <video controls autoplay style="width:100%; max-height:70vh; border-radius:10px; background:#000;">
+                        <source src="/gallery/videos/stream/${timestamp}" type="video/mp4">
+                        Your browser does not support video playback.
+                    </video>
+                `;
+                
+                modalImage.style.display = 'none';
+                modalImage.insertAdjacentHTML('afterend', '<div id="videoPlayerContainer">' + videoHTML + '</div>');
+                
+                // Load metadata
+                const res = await fetch(`/gallery/videos/json/${timestamp}`);
+                const data = await res.json();
+
+                modalTitle.textContent = `Video Analysis`;
+                modalTimestamp.textContent = formatTimestamp(timestamp);
+                modalDetCount.textContent = data.total_detections || 0;
+
+                modalDetections.innerHTML = `
+                    <div style="display:grid; grid-template-columns:repeat(2, 1fr); gap:15px; margin-bottom:20px;">
+                        <div class="stat-card">
+                            <div class="stat-value">${data.total_frames}</div>
+                            <div class="stat-label">Total Frames</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value">${data.frames_with_detections}</div>
+                            <div class="stat-label">Frames with Detections</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value">${data.fps.toFixed(1)}</div>
+                            <div class="stat-label">FPS</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value">${(data.total_frames / data.fps).toFixed(1)}s</div>
+                            <div class="stat-label">Duration</div>
+                        </div>
+                    </div>
+                    <h4 style="color: #e63946; margin-top:20px;">Detection Timeline (First 100 frames)</h4>
+                    ${data.detection_summary && data.detection_summary.length > 0 
+                        ? data.detection_summary.map(d => `
+                            <div class="detection-item">
+                                Frame #${d.frame}: ${d.count} object${d.count !== 1 ? 's' : ''} detected
+                            </div>
+                        `).join('')
+                        : '<p style="color: #666;">No detection timeline available</p>'
+                    }
+                `;
+
+                modal.style.display = 'block';
+            } catch (e) {
+                alert('Failed to load video: ' + e.message);
+            }
         };
 
         // ============ EVENT LISTENERS ============
