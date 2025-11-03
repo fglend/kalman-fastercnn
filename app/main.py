@@ -23,6 +23,7 @@ import time
 from threading import Thread
 from fastapi import BackgroundTasks
 from fastapi.responses import JSONResponse
+from PIL import ImageEnhance, ImageOps
 
 # ============================================================
 # Initialization
@@ -129,6 +130,11 @@ def process_video_job(job_id, video_path, output_path):
             if frame_i % skip != 0:
                 out.write(frame)  # Write unprocessed frames
                 continue
+
+            # ✅ Apply grayscale + darken
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            darkened = cv2.convertScaleAbs(gray, alpha=0.8, beta=0)
+            frame = cv2.cvtColor(darkened, cv2.COLOR_GRAY2BGR)
 
             img_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             tensor = transform(img_rgb).unsqueeze(0).to(device, non_blocking=True)
@@ -242,10 +248,6 @@ def get_result(job_id: str):
     if "timestamp" in job:
         response.headers["X-Video-Timestamp"] = job["timestamp"]
     return response
-    job = jobs.get(job_id)
-    if not job or job["status"] != "done":
-        return JSONResponse(content={"error": "Job not ready"}, status_code=400)
-    return StreamingResponse(open(job["output"], "rb"), media_type="video/mp4")
 
 # ============================================================
 # Save Image and Json File After Analysis
@@ -399,20 +401,31 @@ def visualize_image(file: UploadFile = File(...)):
         tensor = preprocess_image(contents)
         if device.type != "cpu":
             tensor = tensor.to(device)
+
         outputs = model(tensor)[0]
         boxes, labels, scores = filter_predictions(outputs, settings.SCORE_THRESH)
+
+        # ✅ Convert to grayscale and darken
         image = Image.open(io.BytesIO(contents)).convert("RGB")
+        image = ImageOps.grayscale(image)  # Convert to black and white
+        enhancer = ImageEnhance.Brightness(image)
+        image = enhancer.enhance(0.8)
+        image = image.convert("RGB")
+
         draw = ImageDraw.Draw(image)
         font = ImageFont.load_default()
+
         for b, l, s in zip(boxes, labels, scores):
             x_min, y_min, x_max, y_max = map(float, b)
             draw.rectangle([x_min, y_min, x_max, y_max], outline="red", width=3)
             draw.text((x_min, max(y_min - 10, 0)),
                       f"ID:{int(l)} | {s:.2f}", fill="yellow", font=font)
+
         img_bytes = io.BytesIO()
         image.save(img_bytes, format="JPEG")
         img_bytes.seek(0)
         return StreamingResponse(img_bytes, media_type="image/jpeg")
+
     except Exception as e:
         print(f"❌ Visualization error: {e}")
         return {"error": str(e)}
@@ -530,6 +543,11 @@ def analyze_video(file: UploadFile = File(...)):
             frame_idx += 1
             if frame_idx % skip_frames != 0:
                 continue  # ✅ skip frames to reduce load
+
+             # ✅ Apply grayscale + darken
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            darkened = cv2.convertScaleAbs(gray, alpha=0.8, beta=0)
+            frame = cv2.cvtColor(darkened, cv2.COLOR_GRAY2BGR)
 
             # ✅ Resize to smaller copy for processing, keep original for draw
             img_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
