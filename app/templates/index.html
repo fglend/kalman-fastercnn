@@ -12,7 +12,7 @@
             font-family: 'Segoe UI', Arial, sans-serif;
             padding: 20px;
         }
-        .container { max-width: 1200px; margin: 0 auto; }
+        .container { max-width: 1400px; margin: 0 auto; }
         h1 {
             text-align: center;
             color: #e63946;
@@ -239,7 +239,6 @@
             color:#90ee90;
             font-weight:bold;
         }
-        /* ✅ Video Preview Styles */
         .video-preview-container {
             background: rgba(0,0,0,0.3);
             border-radius: 10px;
@@ -265,6 +264,130 @@
             margin-top: 15px;
             flex-wrap: wrap;
         }
+        
+        /* ✅ GALLERY STYLES */
+        .gallery-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .gallery-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+        .gallery-item {
+            background: rgba(0,0,0,0.4);
+            border-radius: 10px;
+            overflow: hidden;
+            border: 2px solid transparent;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        .gallery-item:hover {
+            border-color: #e63946;
+            transform: translateY(-5px);
+            box-shadow: 0 8px 20px rgba(230, 57, 70, 0.3);
+        }
+        .gallery-image {
+            width: 100%;
+            height: 200px;
+            object-fit: cover;
+            background: #000;
+        }
+        .gallery-info {
+            padding: 15px;
+        }
+        .gallery-info h4 {
+            color: #e63946;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+        .gallery-meta {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            color: #aaa;
+            margin-bottom: 10px;
+        }
+        .gallery-detections {
+            background: rgba(76, 175, 80, 0.1);
+            padding: 8px;
+            border-radius: 4px;
+            text-align: center;
+            color: #4caf50;
+            font-weight: 600;
+        }
+        .empty-gallery {
+            text-align: center;
+            padding: 60px 20px;
+            color: #666;
+        }
+        .empty-gallery-icon {
+            font-size: 64px;
+            margin-bottom: 20px;
+            opacity: 0.5;
+        }
+        
+        /* Modal for viewing full image */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.95);
+            overflow: auto;
+        }
+        .modal-content {
+            position: relative;
+            margin: 2% auto;
+            max-width: 90%;
+            max-height: 90vh;
+        }
+        .modal-image {
+            width: 100%;
+            height: auto;
+            border-radius: 10px;
+        }
+        .modal-close {
+            position: absolute;
+            top: 20px;
+            right: 40px;
+            color: #fff;
+            font-size: 40px;
+            font-weight: bold;
+            cursor: pointer;
+            z-index: 1001;
+        }
+        .modal-close:hover {
+            color: #e63946;
+        }
+        .modal-info {
+            background: rgba(0,0,0,0.8);
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 20px;
+            color: #fff;
+        }
+        .detection-list {
+            max-height: 300px;
+            overflow-y: auto;
+            margin-top: 10px;
+        }
+        .detection-item {
+            background: rgba(255,255,255,0.05);
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 5px;
+            border-left: 3px solid #4caf50;
+        }
     </style>
 </head>
 <body>
@@ -274,6 +397,7 @@
         <div class="tabs">
             <button class="tab-btn active" data-tab="image">📷 Image Analysis</button>
             <button class="tab-btn" data-tab="video">🎬 Video Analysis</button>
+            <button class="tab-btn" data-tab="gallery">🖼️ Gallery</button>
         </div>
 
         <!-- IMAGE TAB -->
@@ -332,7 +456,7 @@
             <div id="imageError"></div>
         </div>
 
-        <!-- ================= VIDEO TAB ================= -->
+        <!-- VIDEO TAB -->
         <div id="video" class="tab-content">
             <div class="upload-section" data-upload="video">
                 <input type="file" id="videoInput" accept="video/*">
@@ -360,7 +484,6 @@
                 </div>
             </div>
 
-            <!-- ✅ Video Preview Section -->
             <div id="videoPreviewSection" style="display:none;">
                 <div class="video-preview-container">
                     <h3>🎥 Analyzed Video Preview</h3>
@@ -376,10 +499,53 @@
 
             <div id="videoError"></div>
         </div>
+
+        <!-- ✅ GALLERY TAB -->
+        <div id="gallery" class="tab-content">
+            <div class="gallery-header">
+                <h2 style="color: #e63946; margin: 0;">🖼️ Saved Detections</h2>
+                <div style="display: flex; gap: 10px;">
+                    <button id="refreshGalleryBtn" class="btn-orange">🔄 Refresh</button>
+                </div>
+            </div>
+
+            <div class="loading" id="galleryLoading">
+                <div class="spinner"></div>
+                <p>Loading gallery...</p>
+            </div>
+
+            <div id="galleryContainer">
+                <div class="empty-gallery">
+                    <div class="empty-gallery-icon">📷</div>
+                    <h3>No saved detections yet</h3>
+                    <p>Analyze some images to see them here!</p>
+                </div>
+            </div>
+
+            <div id="galleryError"></div>
+        </div>
+    </div>
+
+    <!-- ✅ MODAL FOR VIEWING FULL IMAGE -->
+    <div id="imageModal" class="modal">
+        <span class="modal-close">&times;</span>
+        <div class="modal-content">
+            <img id="modalImage" class="modal-image" alt="Full view">
+            <div class="modal-info">
+                <h3 id="modalTitle" style="color: #e63946;">Detection Details</h3>
+                <p id="modalTimestamp" style="color: #aaa; font-size: 14px;"></p>
+                <div class="stats" style="margin: 15px 0;">
+                    <div class="stat-card">
+                        <div class="stat-value" id="modalDetCount">0</div>
+                        <div class="stat-label">Objects Detected</div>
+                    </div>
+                </div>
+                <div class="detection-list" id="modalDetections"></div>
+            </div>
+        </div>
     </div>
 
     <script>
-        // ============ STATE MANAGEMENT ============
         const state = {
             image: {
                 file: null,
@@ -390,16 +556,17 @@
             video: {
                 file: null,
                 resultBlob: null
+            },
+            gallery: {
+                items: []
             }
         };
 
-        // ============ UTILITY FUNCTIONS ============
         const $ = (id) => document.getElementById(id);
         const $$ = (selector) => document.querySelectorAll(selector);
         
         const show = (el) => el.style.display = el.tagName === 'DIV' ? 'block' : 'inline-block';
         const hide = (el) => el.style.display = 'none';
-        const toggle = (el, condition) => condition ? show(el) : hide(el);
 
         const showMessage = (container, message, type = 'error') => {
             container.innerHTML = `<div class="message ${type}">${message}</div>`;
@@ -414,30 +581,31 @@
                 $$('.tab-content').forEach(c => c.classList.remove('active'));
                 e.target.classList.add('active');
                 $(e.target.dataset.tab).classList.add('active');
+                
+                // ✅ Load gallery when tab is opened
+                if (e.target.dataset.tab === 'gallery') {
+                    loadGallery();
+                }
             });
         });
 
-        // ============ DRAG & DROP HANDLER ============
+        // ============ DRAG & DROP ============
         const setupDragDrop = (uploadSection, fileInput, handleFile) => {
-            const handlers = {
-                dragover: (e) => {
-                    e.preventDefault();
-                    uploadSection.classList.add('dragging');
-                },
-                dragleave: () => uploadSection.classList.remove('dragging'),
-                drop: (e) => {
-                    e.preventDefault();
-                    uploadSection.classList.remove('dragging');
-                    const files = e.dataTransfer.files;
-                    if (files.length) {
-                        fileInput.files = files;
-                        handleFile();
-                    }
+            uploadSection.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                uploadSection.classList.add('dragging');
+            });
+            uploadSection.addEventListener('dragleave', () => {
+                uploadSection.classList.remove('dragging');
+            });
+            uploadSection.addEventListener('drop', (e) => {
+                e.preventDefault();
+                uploadSection.classList.remove('dragging');
+                const files = e.dataTransfer.files;
+                if (files.length) {
+                    fileInput.files = files;
+                    handleFile();
                 }
-            };
-
-            Object.entries(handlers).forEach(([event, handler]) => {
-                uploadSection.addEventListener(event, handler);
             });
         };
 
@@ -522,8 +690,8 @@
             const bounds = {
                 cx1: Math.floor(width * 0.4),
                 cx2: Math.floor(width * 0.6),
-                cy1: Math.floor(height * 0.4),
-                cy2: Math.floor(height * 0.6)
+                cy1: Math.floor(width * 0.4),
+                cy2: Math.floor(width * 0.6)
             };
 
             let sumCenter = 0, sumOuter = 0, countCenter = 0, countOuter = 0;
@@ -562,15 +730,9 @@
 
                 const w = els.guideCanvas.width;
                 const h = els.guideCanvas.height;
-                const centerBox = {
-                    w: w * 0.4,
-                    h: h * 0.4,
-                    x: w * 0.3,
-                    y: h * 0.3
-                };
+                const centerBox = { w: w * 0.4, h: h * 0.4, x: w * 0.3, y: h * 0.3 };
 
                 gctx.clearRect(0, 0, w, h);
-
                 gctx.strokeStyle = "rgba(255,255,255,0.3)";
                 gctx.lineWidth = 1;
                 for (let i = 1; i < 3; i++) {
@@ -605,7 +767,6 @@
 
                 state.image.animationId = requestAnimationFrame(draw);
             };
-            
             draw();
         };
 
@@ -686,8 +847,6 @@
             hide(videoEls.loading);
             videoEls.player.src = '';
             clearMessage(videoEls.error);
-            
-            // Reset progress
             $('progressBar').style.width = '0%';
             $('progressText').textContent = 'Processing: 0%';
         };
@@ -735,12 +894,9 @@
                         const blob = await videoRes.blob();
                         state.video.resultBlob = blob;
                         
-                        // ✅ Set video source and show preview
                         const url = URL.createObjectURL(blob);
                         videoEls.player.src = url;
                         show(videoEls.previewSection);
-                        
-                        // Auto-play the video
                         videoEls.player.play().catch(e => console.log('Autoplay prevented:', e));
                     }
                 }, 1500);
@@ -749,6 +905,122 @@
                 hide(progressContainer);
                 showMessage(videoEls.error, `Error: ${e.message}`);
             }
+        };
+
+        // ============ GALLERY FUNCTIONS ============
+        const loadGallery = async () => {
+            const galleryContainer = $('galleryContainer');
+            const galleryLoading = $('galleryLoading');
+            const galleryError = $('galleryError');
+
+            show(galleryLoading);
+            clearMessage(galleryError);
+
+            try {
+                const res = await fetch('/gallery/list');
+                const data = await res.json();
+
+                hide(galleryLoading);
+
+                if (!data.items || data.items.length === 0) {
+                    galleryContainer.innerHTML = `
+                        <div class="empty-gallery">
+                            <div class="empty-gallery-icon">📷</div>
+                            <h3>No saved detections yet</h3>
+                            <p>Analyze some images to see them here!</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                state.gallery.items = data.items;
+                renderGallery(data.items);
+            } catch (e) {
+                hide(galleryLoading);
+                showMessage(galleryError, `Failed to load gallery: ${e.message}`);
+            }
+        };
+
+        const renderGallery = (items) => {
+            const galleryContainer = $('galleryContainer');
+            
+            galleryContainer.innerHTML = `
+                <div class="gallery-grid">
+                    ${items.map(item => `
+                        <div class="gallery-item" onclick="openModal('${item.timestamp}')">
+                            <img class="gallery-image" 
+                                 src="/gallery/image/${item.timestamp}" 
+                                 alt="Detection ${item.timestamp}"
+                                 loading="lazy">
+                            <div class="gallery-info">
+                                <h4>${formatTimestamp(item.timestamp)}</h4>
+                                <div class="gallery-meta">
+                                    <span>📅 ${new Date(parseTimestamp(item.timestamp)).toLocaleDateString()}</span>
+                                    <span>🕐 ${new Date(parseTimestamp(item.timestamp)).toLocaleTimeString()}</span>
+                                </div>
+                                <div class="gallery-detections">
+                                    ${item.num_detections} object${item.num_detections !== 1 ? 's' : ''} detected
+                                </div>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        };
+
+        const formatTimestamp = (ts) => {
+            return ts.replace(/(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})(\d{2})/, '$1-$2-$3 $4:$5:$6');
+        };
+
+        const parseTimestamp = (ts) => {
+            const match = ts.match(/(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})(\d{2})/);
+            if (match) {
+                return new Date(match[1], match[2]-1, match[3], match[4], match[5], match[6]);
+            }
+            return new Date();
+        };
+
+        const openModal = async (timestamp) => {
+            const modal = $('imageModal');
+            const modalImage = $('modalImage');
+            const modalTitle = $('modalTitle');
+            const modalTimestamp = $('modalTimestamp');
+            const modalDetCount = $('modalDetCount');
+            const modalDetections = $('modalDetections');
+
+            try {
+                // Load visualized image
+                modalImage.src = `/gallery/visualize/${timestamp}`;
+                
+                // Load detection data
+                const res = await fetch(`/gallery/json/${timestamp}`);
+                const data = await res.json();
+
+                modalTitle.textContent = `Detection Analysis`;
+                modalTimestamp.textContent = formatTimestamp(timestamp);
+                modalDetCount.textContent = data.num_detections || 0;
+
+                if (data.detections && data.detections.length > 0) {
+                    modalDetections.innerHTML = data.detections.map((d, i) => `
+                        <div class="detection-item">
+                            <strong>Object #${i + 1}</strong><br>
+                            Label ID: ${d.label_id} | 
+                            Confidence: ${(d.score * 100).toFixed(1)}%<br>
+                            Box: [${Math.round(d.x_min)}, ${Math.round(d.y_min)}, ${Math.round(d.x_max)}, ${Math.round(d.y_max)}]
+                        </div>
+                    `).join('');
+                } else {
+                    modalDetections.innerHTML = '<p style="color: #666;">No detections found</p>';
+                }
+
+                modal.style.display = 'block';
+            } catch (e) {
+                alert('Failed to load image details: ' + e.message);
+            }
+        };
+
+        const closeModal = () => {
+            $('imageModal').style.display = 'none';
         };
 
         // ============ EVENT LISTENERS ============
@@ -761,6 +1033,7 @@
                 if (file) setImageFile(file, 'upload');
             }
         );
+        
         els.imageInput.addEventListener('change', () => {
             const file = els.imageInput.files[0];
             if (file) setImageFile(file, 'upload');
@@ -814,6 +1087,7 @@
                 if (file) setVideoFile(file);
             }
         );
+        
         videoEls.input.addEventListener('change', () => {
             const file = videoEls.input.files[0];
             if (file) setVideoFile(file);
@@ -822,7 +1096,6 @@
         videoEls.analyzeBtn.addEventListener('click', analyzeVideo);
         videoEls.clearBtn.addEventListener('click', clearVideoState);
 
-        // ✅ Download button handler
         videoEls.downloadBtn.addEventListener('click', () => {
             if (state.video.resultBlob) {
                 const url = URL.createObjectURL(state.video.resultBlob);
@@ -834,8 +1107,16 @@
             }
         });
 
-        // ✅ Analyze another video button
         videoEls.analyzeAnotherBtn.addEventListener('click', clearVideoState);
+
+        // Gallery events
+        $('refreshGalleryBtn').addEventListener('click', loadGallery);
+
+        // Modal events
+        $('imageModal').querySelector('.modal-close').addEventListener('click', closeModal);
+        $('imageModal').addEventListener('click', (e) => {
+            if (e.target.id === 'imageModal') closeModal();
+        });
     </script>
 </body>
 </html>
