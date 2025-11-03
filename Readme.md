@@ -1,55 +1,59 @@
 # 🚀 Faster R-CNN w/ Kalman Filter API (FastAPI + PyTorch)
 
-A lightweight web API for **real-time object detection** using a trained **Faster R-CNN with Kalman Filter** model.  
-Includes endpoints for image prediction, visualization, and live camera streaming — optimized for smooth performance on both **macOS (M-series)** and **Windows**.
+A high-performance web API for **object detection, video analytics, and evaluation** using a trained **Faster R-CNN with Kalman Filter** model.  
+Includes endpoints for **image prediction**, **video analysis**, **live streaming**, and **automatic gallery management** — optimized for both **CPU** and **GPU** inference.
 
 ---
 
 ## 🧠 Features
-- **REST API** built with FastAPI  
-- **Image upload** detection endpoint (`/predict-image`)  
-- **Visualization endpoint** returning annotated images (`/visualize-image`)  
-- **Live camera streaming** (`/live`) with threaded inference  
-- **Automatic saving** of:
-  - 🖼️ Predicted images (`/results/images`)
-  - 📄 Detection JSON (`/results/json`)
-  - 📦 COCO-format annotations (`/results/coco`)
-- Compatible with **CPU**, **CUDA**, and **Apple Silicon (MPS)**  
-- Fully **Docker-ready** and works with or without attached storage volumes  
+
+- ⚡ **FastAPI REST API** with threaded inference
+- 🖼️ Image & video upload endpoints for real-time detection
+- 🎯 **Kalman Filter-based tracking** for smoother temporal consistency
+- 📊 **Automatic saving and gallery view** for all analyzed media
+- 📁 Organized storage:
+  - `/results/images` — original uploads
+  - `/results/json` — raw detections
+  - `/results/coco` — COCO-format annotations
+  - `/results/videos` — processed clips
+  - `/results/videos_json` — video metadata
+- 🧩 Built-in web UI with:
+  - **📷 Image analysis**
+  - **🎬 Video analysis**
+  - **🖼️ Gallery viewer with download buttons**
+- 🧮 Compatible with **CPU**, **CUDA**, and **Apple Silicon (MPS)**
+- 🐳 Fully **Docker-ready**, with volume support for persistent results
 
 ---
 
 ## 🧠 Trained Model
-📦 Model weights (Faster R-CNN + Kalman Filter)  
+
+📦 **Faster R-CNN + Kalman Filter weights**  
 🔗 [Request Access Here](https://drive.google.com/file/d/1KC9LZ1u8av3O4lO-_VJ8r9P_2PHnzsLU/view?usp=drive_link)
 
 ---
 
-## 🖼️ System Sample
+## 🖼️ System UI Samples
 
-Hosted via [LocalTunnel](https://theboroer.github.io/localtunnel-www/).  
-LocalTunnel uses your **local IP address** as a one-time password (see credentials in the shared Drive `.txt` file).
+Hosted via [LocalTunnel](https://theboroer.github.io/localtunnel-www/)
 
-### 🔹 Image / Video Analysis  
+### 🔹 Image / Video Analysis
+
 🔗 [https://gd-live.loca.lt/](https://gd-live.loca.lt/)
 
-<p align="center">
-  <img src="/assets/1.png" alt="System Sample" width="600"/>
-</p>
+<p align="center"><img src="/assets/1.png" width="600"/></p>
 
-### 🔹 Live Detection  
+### 🔹 Live Detection
+
 🔗 [https://gd-live.loca.lt/live](https://gd-live.loca.lt/live)
 
-<p align="center">
-  <img src="/assets/2.png" alt="System Sample" width="600"/>
-</p>
+<p align="center"><img src="/assets/2.png" width="600"/></p>
 
-### 🔹 API Docs  
+### 🔹 API Docs
+
 🔗 [https://gd-live.loca.lt/docs](https://gd-live.loca.lt/docs)
 
-<p align="center">
-  <img src="/assets/3.png" alt="System Sample" width="600"/>
-</p>
+<p align="center"><img src="/assets/3.png" width="600"/></p>
 
 ---
 
@@ -58,6 +62,7 @@ LocalTunnel uses your **local IP address** as a one-time password (see credentia
 Python 3.10+
 
 ### Dependencies
+
 ```bash
 fastapi==0.115.0
 uvicorn[standard]==0.30.6
@@ -72,16 +77,16 @@ opencv-python==4.10.0.84
 
 ---
 
-## ⚙️ Installation (Local – Mac / Windows)
+## ⚙️ Installation (Local)
 
 ```bash
-# 1️⃣ Clone the repository
+# 1️⃣ Clone the repo
 git clone https://github.com/fglend/kalman-fastercnn.git
 cd kalman-fastercnn
 
 # 2️⃣ Create a virtual environment
 python -m venv venv
-venv\Scripts\activate       # Windows PowerShell  
+venv\Scripts\activate       # Windows PowerShell
 # or
 source venv/bin/activate    # macOS / Linux
 
@@ -93,8 +98,9 @@ uvicorn app.main:app --host 0.0.0.0 --port 8080 --reload
 ```
 
 Then open:
-- API Docs → [http://localhost:8080/docs](http://localhost:8080/docs)
-- Live Stream → [http://localhost:8080/live](http://localhost:8080/live)
+
+- Docs → [http://localhost:8080/docs](http://localhost:8080/docs)
+- Live → [http://localhost:8080/live](http://localhost:8080/live)
 
 ---
 
@@ -105,13 +111,14 @@ Then open:
 docker build -t fasterrcnn-api .
 ```
 
-### 🧩 Run the Container
+### Run the container
+
 ```bash
-# Simple run
 docker run -p 8080:8080 fasterrcnn-api
 ```
 
-### 💾 Mount your model or results folder
+### With mounted volumes
+
 ```bash
 # macOS / Linux
 docker run -p 8080:8080 -v $(pwd)/models:/models -v $(pwd)/results:/results fasterrcnn-api
@@ -120,39 +127,42 @@ docker run -p 8080:8080 -v $(pwd)/models:/models -v $(pwd)/results:/results fast
 docker run -p 8080:8080 -v ${PWD}/models:/models -v ${PWD}/results:/results fasterrcnn-api
 ```
 
-> The container will automatically detect `/models` and `/results`.  
-> If no volume is attached, it uses Docker’s internal storage (ephemeral).
-
 ---
 
-## 🧩 Auto-Saving Behavior
+## 📂 Auto-Saving & Gallery System
 
-Whenever `/predict-image` or `/visualize-image` is called, the app automatically:
-1. Saves the **uploaded image** to `/results/images/`
-2. Writes a **detection JSON** file to `/results/json/`
-3. Generates a **COCO-format annotation** file to `/results/coco/`
+Each `/predict-image` or `/visualize-image` request automatically saves:
 
-### Example:
+- Original input → `/results/images`
+- JSON detections → `/results/json`
+- COCO annotation → `/results/coco`
+
+Videos analyzed via `/start-analyze` are stored under `/results/videos` with metadata in `/results/videos_json`.
+
+### Example Output
+
 ```
-✅ Saved: /results/images/20251027_031154.jpg  
-✅ Saved: /results/json/20251027_031154.json  
-✅ Saved: /results/coco/20251027_031154.json
+✅ /results/images/20251103_125959.jpg
+✅ /results/json/20251103_125959.json
+✅ /results/coco/20251103_125959.json
 ```
 
 ---
 
-## 🔍 API Endpoints
+## 🔍 Key API Endpoints
 
-### **1️⃣ Health Check**
-**GET** `/health`  
-Returns the model’s current device and runtime info.
+### **Health Check**
+
+**GET** `/health`
+
+> Returns device info and runtime status.
 
 ---
 
-### **2️⃣ Predict Image**
+### **Image Prediction**
+
 **POST** `/predict-image`  
-Uploads an image and returns detections in JSON format.  
-Also saves predictions automatically.
+Returns detection boxes and scores as JSON.
 
 ```bash
 curl -X POST "http://localhost:8080/predict-image" -F "file=@sample.jpg"
@@ -160,9 +170,10 @@ curl -X POST "http://localhost:8080/predict-image" -F "file=@sample.jpg"
 
 ---
 
-### **3️⃣ Visualize Image**
+### **Visualization**
+
 **POST** `/visualize-image`  
-Returns an annotated image (JPEG) showing all detections.
+Returns grayscale, darkened annotated image with red bounding boxes.
 
 ```bash
 curl -X POST "http://localhost:8080/visualize-image" -F "file=@sample.jpg" --output output.jpg
@@ -170,15 +181,53 @@ curl -X POST "http://localhost:8080/visualize-image" -F "file=@sample.jpg" --out
 
 ---
 
-### **4️⃣ Live Stream**
-**GET** `/live`  
-Starts live camera detection (works on Chrome desktop or mobile devices on the same network).
+### **Video Analysis**
+
+**POST** `/start-analyze`  
+Processes uploaded video asynchronously with progress tracking.
+
+Progress can be checked with:
+
+- `/progress/{job_id}` — current status
+- `/result/{job_id}` — final MP4 result stream
+
+---
+
+### **Gallery Endpoints**
+
+| Type          | Endpoint                         | Description                    |
+| ------------- | -------------------------------- | ------------------------------ |
+| 📋 List       | `/gallery/list`                  | Returns all saved detections   |
+| 🖼️ Image      | `/gallery/image/{timestamp}`     | Original saved image           |
+| 🟥 Visualized | `/gallery/visualize/{timestamp}` | Annotated image with red boxes |
+| 📄 JSON       | `/gallery/json/{timestamp}`      | Detection data                 |
+| ❌ Delete     | `/gallery/delete/{timestamp}`    | Remove saved item              |
+
+Video gallery:
+| Type | Endpoint | Description |
+|------|-----------|-------------|
+| 🎞️ List | `/gallery/videos/list` | List analyzed videos |
+| ▶️ Stream | `/gallery/videos/stream/{timestamp}` | Stream processed video |
+| 🧾 Metadata | `/gallery/videos/json/{timestamp}` | Video metadata |
+| 🗑️ Delete | `/gallery/videos/delete/{timestamp}` | Remove video files |
+
+---
+
+## 🧩 Web UI Tabs
+
+| Tab                   | Description                                                                               |
+| --------------------- | ----------------------------------------------------------------------------------------- |
+| **📷 Image Analysis** | Upload or capture photo for detection                                                     |
+| **🎬 Video Analysis** | Upload MP4 for frame-by-frame inference                                                   |
+| **🖼️ Gallery**        | View all saved detections with modal viewer                                               |
+|                       | ➕ Each modal includes “📷 Download Original” & “📥 Download with Bounding Boxes” buttons |
 
 ---
 
 ## ⚙️ Configuration
 
-Edit `app/config.py` for environment and threshold setup:
+Edit `app/config.py`:
+
 ```python
 DEVICE = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
 NUM_THREADS = 4
@@ -189,42 +238,32 @@ SCORE_THRESH = 0.5
 ---
 
 ## ⚡ Performance Tips
-- 🧮 Use **CUDA (NVIDIA)** or **MPS (Mac)** for faster inference  
-- 🖼️ Lower `T.Resize()` in preprocessing for better FPS  
-- ⚙️ Adjust frame skip in `generate_frames()` to balance accuracy vs speed  
-- 🚀 Close unused browser tabs while streaming to improve latency  
+
+- 🔥 Use **CUDA GPU** or **Apple MPS** for max speed
+- 🖼️ Adjust image `T.Resize()` to 384×384 for higher FPS
+- 🎥 Modify `skip_frames` in `process_video_job()` for speed/accuracy balance
+- 💡 Store `/results` on SSD or mounted Docker volume for better I/O
 
 ---
 
-## 🧠 Notes for macOS Users
-If you see:
-```
-[ WARN:0] VIDEOIO(V4L2:/dev/video0): can't open camera by index
-```
-Try changing:
-```python
-cap = cv2.VideoCapture(1)
-```
-Or enable camera permissions:
-> **System Settings → Privacy & Security → Camera → Allow Terminal / IDE**
+## 📁 Project Layout
 
----
-
-## 📁 Project Structure
 ```
 .
 ├── app/
-│   ├── main.py              # FastAPI app
+│   ├── main.py              # FastAPI + endpoints
 │   ├── model.py             # Model loader
-│   ├── predict_utils.py     # Preprocessing & filtering
-│   ├── config.py            # Environment configuration
-│   └── templates/           # HTML UI templates
+│   ├── predict_utils.py     # Preprocessing helpers
+│   ├── config.py            # Settings
+│   └── templates/           # HTML frontend
 ├── models/
-│   └── best_model.pth       # Trained weights
+│   └── best_model.pth
 ├── results/
-│   ├── images/              # Saved predictions
-│   ├── json/                # Detection outputs
-│   └── coco/                # COCO annotations
+│   ├── images/
+│   ├── json/
+│   ├── coco/
+│   ├── videos/
+│   └── videos_json/
 ├── requirements.txt
 ├── Dockerfile
 └── README.md
@@ -233,10 +272,12 @@ Or enable camera permissions:
 ---
 
 ## 👨‍💻 Author
+
 **Glend Dale Ferrer**  
-📧 mgdferrer@tip.edu.ph  
+📧 mgdferrer@tip.edu.ph
 
 ---
 
 ## 📜 License
+
 MIT License © 2025 Glend Dale Ferrer
