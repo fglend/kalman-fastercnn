@@ -217,7 +217,6 @@
         .btn-orange:hover {
             background: linear-gradient(135deg, #f57c00, #e65100);
         }
-        /* ✅ Add progress bar style */
         #progressContainer {
             margin-top:20px;
             display:none;
@@ -239,6 +238,32 @@
             margin-top:8px;
             color:#90ee90;
             font-weight:bold;
+        }
+        /* ✅ Video Preview Styles */
+        .video-preview-container {
+            background: rgba(0,0,0,0.3);
+            border-radius: 10px;
+            padding: 20px;
+            border-left: 4px solid #4caf50;
+            margin-top: 20px;
+        }
+        .video-preview-container h3 {
+            color: #4caf50;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+        .video-player {
+            width: 100%;
+            max-height: 600px;
+            border-radius: 8px;
+            background: #000;
+        }
+        .video-controls {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin-top: 15px;
+            flex-wrap: wrap;
         }
     </style>
 </head>
@@ -327,7 +352,6 @@
                 <div class="spinner"></div>
                 <p>Processing video... This may take a while</p>
 
-                <!-- ✅ Progress bar -->
                 <div id="progressContainer">
                     <div id="progressBarWrapper">
                         <div id="progressBar"></div>
@@ -336,9 +360,18 @@
                 </div>
             </div>
 
-            <div id="videoResult" style="display:none;">
-                <div class="message success" id="videoSuccess"></div>
-                <button class="download-btn" id="downloadVideoBtn">Download Analyzed Video</button>
+            <!-- ✅ Video Preview Section -->
+            <div id="videoPreviewSection" style="display:none;">
+                <div class="video-preview-container">
+                    <h3>🎥 Analyzed Video Preview</h3>
+                    <video id="analyzedVideoPlayer" class="video-player" controls>
+                        Your browser does not support the video tag.
+                    </video>
+                    <div class="video-controls">
+                        <button class="download-btn" id="downloadVideoBtn">📥 Download Video</button>
+                        <button class="btn-orange" id="analyzeAnotherBtn">🔄 Analyze Another Video</button>
+                    </div>
+                </div>
             </div>
 
             <div id="videoError"></div>
@@ -355,7 +388,8 @@
                 animationId: null
             },
             video: {
-                file: null
+                file: null,
+                resultBlob: null
             }
         };
 
@@ -497,7 +531,7 @@
             for (let y = 0; y < height; y++) {
                 for (let x = 0; x < width; x++) {
                     const i = (y * width + x) * 4;
-                    const brightness = (data[i] + data[i + 1] + data[i + 2]) / 765; // Optimized: 3 * 255 = 765
+                    const brightness = (data[i] + data[i + 1] + data[i + 2]) / 765;
                     const inCenter = (x >= bounds.cx1 && x <= bounds.cx2 && y >= bounds.cy1 && y <= bounds.cy2);
                     
                     if (inCenter) {
@@ -520,7 +554,6 @@
             const draw = () => {
                 if (!state.image.cameraActive) return;
 
-                // Update canvas size if needed
                 if (els.guideCanvas.width !== els.camera.clientWidth || 
                     els.guideCanvas.height !== els.camera.clientHeight) {
                     els.guideCanvas.width = els.camera.clientWidth;
@@ -538,7 +571,6 @@
 
                 gctx.clearRect(0, 0, w, h);
 
-                // Rule of thirds grid
                 gctx.strokeStyle = "rgba(255,255,255,0.3)";
                 gctx.lineWidth = 1;
                 for (let i = 1; i < 3; i++) {
@@ -554,7 +586,6 @@
                     gctx.stroke();
                 }
 
-                // Brightness analysis
                 if (els.camera.readyState === els.camera.HAVE_ENOUGH_DATA) {
                     tempCanvas.width = 64;
                     tempCanvas.height = 48;
@@ -563,12 +594,10 @@
                     const frame = tempCtx.getImageData(0, 0, 64, 48);
                     const isCentered = getCenterBrightness(frame) > 0.25;
 
-                    // Center box
                     gctx.strokeStyle = isCentered ? "rgba(0,255,0,0.9)" : "rgba(230,57,70,0.9)";
                     gctx.lineWidth = 3;
                     gctx.strokeRect(centerBox.x, centerBox.y, centerBox.w, centerBox.h);
 
-                    // Hint text
                     gctx.font = "18px Segoe UI";
                     gctx.fillStyle = "rgba(255,255,255,0.8)";
                     gctx.fillText(isCentered ? "✅ Ready to capture" : "Align object to center box", 20, 30);
@@ -600,11 +629,9 @@
                 const predData = await predRes.json();
                 const visBlob = await visRes.blob();
 
-                // Display images
                 $('originalImage').src = URL.createObjectURL(state.image.file);
                 $('visualizedImage').src = URL.createObjectURL(visBlob);
 
-                // Display stats
                 $('imageStats').innerHTML = `
                     <div class="stat-card">
                         <div class="stat-value">${predData.num_detections}</div>
@@ -612,7 +639,6 @@
                     </div>
                 `;
 
-                // Display info
                 const info = $('imageInfo');
                 info.innerHTML = predData.detections.length > 0
                     ? '<h4>Detection Results:</h4>' + predData.detections
@@ -636,10 +662,11 @@
             analyzeBtn: $('analyzeVideoBtn'),
             clearBtn: $('clearVideoBtn'),
             loading: $('videoLoading'),
-            result: $('videoResult'),
+            previewSection: $('videoPreviewSection'),
+            player: $('analyzedVideoPlayer'),
             error: $('videoError'),
-            success: $('videoSuccess'),
-            downloadBtn: $('downloadVideoBtn')
+            downloadBtn: $('downloadVideoBtn'),
+            analyzeAnotherBtn: $('analyzeAnotherBtn')
         };
 
         const setVideoFile = (file) => {
@@ -651,19 +678,25 @@
 
         const clearVideoState = () => {
             state.video.file = null;
+            state.video.resultBlob = null;
             videoEls.input.value = '';
             videoEls.fileName.textContent = '';
             videoEls.analyzeBtn.disabled = true;
-            hide(videoEls.result);
+            hide(videoEls.previewSection);
             hide(videoEls.loading);
+            videoEls.player.src = '';
             clearMessage(videoEls.error);
+            
+            // Reset progress
+            $('progressBar').style.width = '0%';
+            $('progressText').textContent = 'Processing: 0%';
         };
 
         const analyzeVideo = async () => {
             if (!state.video.file) return;
 
             show(videoEls.loading);
-            hide(videoEls.result);
+            hide(videoEls.previewSection);
             clearMessage(videoEls.error);
 
             const progressContainer = $('progressContainer');
@@ -675,12 +708,10 @@
             formData.append('file', state.video.file);
 
             try {
-                // 1️⃣ Start job
                 const startRes = await fetch('/start-analyze', { method: 'POST', body: formData });
                 const { job_id } = await startRes.json();
                 if (!job_id) throw new Error('Failed to start analysis');
 
-                // 2️⃣ Poll progress
                 const poll = setInterval(async () => {
                     const res = await fetch(`/progress/${job_id}`);
                     const data = await res.json();
@@ -700,19 +731,17 @@
                         hide(progressContainer);
                         hide(videoEls.loading);
 
-                        // 3️⃣ Download result
                         const videoRes = await fetch(`/result/${job_id}`);
                         const blob = await videoRes.blob();
+                        state.video.resultBlob = blob;
+                        
+                        // ✅ Set video source and show preview
                         const url = URL.createObjectURL(blob);
-
-                        videoEls.success.innerHTML = `✅ Video analyzed successfully!`;
-                        videoEls.downloadBtn.onclick = () => {
-                            const a = document.createElement('a');
-                            a.href = url;
-                            a.download = 'analyzed_' + state.video.file.name;
-                            a.click();
-                        };
-                        show(videoEls.result);
+                        videoEls.player.src = url;
+                        show(videoEls.previewSection);
+                        
+                        // Auto-play the video
+                        videoEls.player.play().catch(e => console.log('Autoplay prevented:', e));
                     }
                 }, 1500);
             } catch (e) {
@@ -721,11 +750,9 @@
                 showMessage(videoEls.error, `Error: ${e.message}`);
             }
         };
+
         // ============ EVENT LISTENERS ============
         
-        // Tabs are already set up above
-
-        // Image upload
         setupDragDrop(
             document.querySelector('[data-upload="image"]'),
             els.imageInput,
@@ -739,7 +766,6 @@
             if (file) setImageFile(file, 'upload');
         });
 
-        // Camera controls
         els.toggleCameraBtn.addEventListener('click', () => {
             state.image.cameraActive ? stopCamera() : startCamera();
         });
@@ -777,11 +803,9 @@
             startCamera();
         });
 
-        // Image actions
         els.analyzeImageBtn.addEventListener('click', analyzeImage);
         els.clearImageBtn.addEventListener('click', clearImageState);
 
-        // Video upload
         setupDragDrop(
             document.querySelector('[data-upload="video"]'),
             videoEls.input,
@@ -795,9 +819,23 @@
             if (file) setVideoFile(file);
         });
 
-        // Video actions
         videoEls.analyzeBtn.addEventListener('click', analyzeVideo);
         videoEls.clearBtn.addEventListener('click', clearVideoState);
+
+        // ✅ Download button handler
+        videoEls.downloadBtn.addEventListener('click', () => {
+            if (state.video.resultBlob) {
+                const url = URL.createObjectURL(state.video.resultBlob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'analyzed_' + (state.video.file ? state.video.file.name : 'video.mp4');
+                a.click();
+                URL.revokeObjectURL(url);
+            }
+        });
+
+        // ✅ Analyze another video button
+        videoEls.analyzeAnotherBtn.addEventListener('click', clearVideoState);
     </script>
 </body>
 </html>

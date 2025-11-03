@@ -129,6 +129,8 @@ def process_video_job(job_id, video_path, output_path):
 
             img_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             tensor = transform(img_rgb).unsqueeze(0).to(device, non_blocking=True)
+            if device.type == "cuda":
+                tensor = tensor.half()  # Convert input to FP16
             with torch.no_grad():
                 outputs = model(tensor)[0]
 
@@ -453,7 +455,7 @@ def analyze_video(file: UploadFile = File(...)):
         ])
 
         frame_idx = 0
-        skip_frames = 2  # ✅ skip every other frame for speed (~2× faster)
+        skip_frames = 5  # ✅ skip every other frame for speed (~2× faster)
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         print(f"🎥 Processing {total_frames} frames (skipping {skip_frames-1} of each {skip_frames})")
 
