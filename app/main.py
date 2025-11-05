@@ -142,7 +142,7 @@ def startup_event():
     NUM_CLASSES = int(os.getenv("NUM_CLASSES", "7"))  # Adjust based on your dataset
     
     # Load ResNet50 model
-    print("🔄 Loading ResNet50 model...")
+    print("🔄 Loading Faster-RCNN model...")
     try:
         model_resnet50 = load_model_from_checkpoint(
             RESNET50_PATH, 
@@ -153,13 +153,13 @@ def startup_event():
         model_resnet50.roi_heads.detections_per_img = 350
         model_resnet50.rpn.post_nms_top_n_test = 2000
         model_resnet50.rpn.pre_nms_top_n_test = 2000
-        print(f"✅ ResNet50 model loaded successfully")
+        print(f"✅ Faster-RCNN model loaded successfully")
     except Exception as e:
         print(f"❌ Failed to load ResNet50: {e}")
         raise
     
     # Load ResNet101 model
-    print("🔄 Loading ResNet101 model...")
+    print("🔄 Loading Hybrid model...")
     try:
         model_resnet101 = load_model_from_checkpoint(
             RESNET101_PATH,
@@ -169,7 +169,7 @@ def startup_event():
         model_resnet101.roi_heads.detections_per_img = 350
         model_resnet101.rpn.post_nms_top_n_test = 2000
         model_resnet101.rpn.pre_nms_top_n_test = 2000
-        print(f"✅ ResNet101 model loaded successfully")
+        print(f"✅ Hybrid model loaded successfully")
     except Exception as e:
         print(f"❌ Failed to load ResNet101: {e}")
         raise
