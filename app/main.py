@@ -49,16 +49,113 @@ app.add_middleware(
 )
 
 # ============================================================
+# Model Loader - Load Both Models from .pth files
+# ============================================================
+def load_model_from_checkpoint(checkpoint_path, backbone="resnet50", num_classes=91):
+    """Load a trained Faster R-CNN model from checkpoint."""
+    import torchvision
+    from torchvision.models.detection import FasterRCNN
+    from torchvision.models.detection.rpn import AnchorGenerator
+    
+    # Create model based on backbone
+    if backbone == "resnet50":
+        from torchvision.models import resnet50, ResNet50_Weights
+        backbone_model = resnet50(weights=ResNet50_Weights.DEFAULT)
+        backbone_model = torch.nn.Sequential(*list(backbone_model.children())[:-2])
+        backbone_model.out_channels = 2048
+    elif backbone == "resnet101":
+        from torchvision.models import resnet101, ResNet101_Weights
+        backbone_model = resnet101(weights=ResNet101_Weights.DEFAULT)
+        backbone_model = torch.nn.Sequential(*list(backbone_model.children())[:-2])
+        backbone_model.out_channels = 2048
+    else:
+        raise ValueError(f"Unsupported backbone: {backbone}")
+    
+    # Create anchor generator
+    anchor_generator = AnchorGenerator(
+        sizes=((32, 64, 128, 256, 512),),
+        aspect_ratios=((0.5, 1.0, 2.0),)
+    )
+    
+    # Create ROI pooler
+    roi_pooler = torchvision.ops.MultiScaleRoIAlign(
+        featmap_names=['0'],
+        output_size=7,
+        sampling_ratio=2
+    )
+    
+    # Create Faster R-CNN model
+    model = FasterRCNN(
+        backbone_model,
+        num_classes=num_classes,
+        rpn_anchor_generator=anchor_generator,
+        box_roi_pool=roi_pooler
+    )
+    
+    # Load checkpoint
+    print(f"Loading checkpoint from: {checkpoint_path}")
+    checkpoint = torch.load(checkpoint_path, map_location=device)
+    
+    # Handle different checkpoint formats
+    if isinstance(checkpoint, dict):
+        if 'model_state_dict' in checkpoint:
+            model.load_state_dict(checkpoint['model_state_dict'])
+            print(f"✅ Loaded model_state_dict (Epoch: {checkpoint.get('epoch', 'N/A')})")
+        elif 'state_dict' in checkpoint:
+            model.load_state_dict(checkpoint['state_dict'])
+            print(f"✅ Loaded state_dict")
+        else:
+            model.load_state_dict(checkpoint)
+            print(f"✅ Loaded checkpoint dict")
+    else:
+        model.load_state_dict(checkpoint)
+        print(f"✅ Loaded checkpoint")
+    
+    model.to(device)
+    model.eval()
+    return model
+
+# ============================================================
 # Model Loader
 # ============================================================
 @app.on_event("startup")
 def startup_event():
-    global model
+    global model_resnet50, model_resnet101
     torch.set_num_threads(settings.NUM_THREADS)
-    model = load_model()
-    model.eval()
-    print(f"✅ Model loaded successfully on {device}")
-    threading.Thread(target=inference_worker, daemon=True).start()
+    
+    # Define paths to your .pth files
+    RESNET50_PATH = os.getenv("RESNET50_MODEL_PATH", "models/faster_rcnn_resnet50.pth")
+    RESNET101_PATH = os.getenv("RESNET101_MODEL_PATH", "models/faster_rcnn_resnet101.pth")
+    NUM_CLASSES = int(os.getenv("NUM_CLASSES", "7"))  # Adjust based on your dataset
+    
+    # Load ResNet50 model
+    print("🔄 Loading ResNet50 model...")
+    try:
+        model_resnet50 = load_model_from_checkpoint(
+            RESNET50_PATH, 
+            backbone="resnet50",
+            num_classes=NUM_CLASSES
+        )
+        print(f"✅ ResNet50 model loaded successfully")
+    except Exception as e:
+        print(f"❌ Failed to load ResNet50: {e}")
+        raise
+    
+    # Load ResNet101 model
+    print("🔄 Loading ResNet101 model...")
+    try:
+        model_resnet101 = load_model_from_checkpoint(
+            RESNET101_PATH,
+            backbone="resnet101", 
+            num_classes=NUM_CLASSES
+        )
+        print(f"✅ ResNet101 model loaded successfully")
+    except Exception as e:
+        print(f"❌ Failed to load ResNet101: {e}")
+        raise
+    
+    print(f"✅ Both models loaded successfully on {device}")
+
 
 # ============================================================
 # Inference Worker
@@ -92,7 +189,11 @@ def inference_worker():
 # ============================================================
 @app.get("/health")
 def health():
-    return {"status": "ok", "device": str(device)}
+    return {
+        "status": "ok", 
+        "device": str(device),
+        "models": ["resnet50", "resnet101"]
+    }
 
 
 # =========================
@@ -868,3 +969,221 @@ def delete_video_item(timestamp: str):
     except Exception as e:
         print(f"❌ Delete error: {e}")
         return JSONResponse(content={"error": str(e)}, status_code=500)
+    
+# ============================================================
+# Compare Models on Single Image
+# ============================================================
+@app.post("/compare-models")
+@torch.no_grad()
+def compare_models(file: UploadFile = File(...)):
+    try:
+        contents = file.file.read()
+        tensor = preprocess_image(contents)
+        if device.type != "cpu":
+            tensor = tensor.to(device)
+
+        # Run both models
+        outputs_resnet50 = model_resnet50(tensor)[0]
+        outputs_resnet101 = model_resnet101(tensor)[0]
+
+        # Filter predictions for both
+        boxes_50, labels_50, scores_50 = filter_predictions(outputs_resnet50, settings.SCORE_THRESH)
+        boxes_101, labels_101, scores_101 = filter_predictions(outputs_resnet101, settings.SCORE_THRESH)
+
+        # Create detections for both
+        detections_resnet50 = [
+            {
+                "x_min": float(b[0]),
+                "y_min": float(b[1]),
+                "x_max": float(b[2]),
+                "y_max": float(b[3]),
+                "score": float(s),
+                "label_id": int(l),
+            }
+            for b, l, s in zip(boxes_50, labels_50, scores_50)
+        ]
+
+        detections_resnet101 = [
+            {
+                "x_min": float(b[0]),
+                "y_min": float(b[1]),
+                "x_max": float(b[2]),
+                "y_max": float(b[3]),
+                "score": float(s),
+                "label_id": int(l),
+            }
+            for b, l, s in zip(boxes_101, labels_101, scores_101)
+        ]
+
+        result_data = {
+            "resnet50": {
+                "detections": detections_resnet50,
+                "num_detections": len(detections_resnet50)
+            },
+            "resnet101": {
+                "detections": detections_resnet101,
+                "num_detections": len(detections_resnet101)
+            }
+        }
+
+        # Save comparison results
+        def async_save():
+            try:
+                save_comparison(contents, result_data, file.filename)
+            except Exception as e:
+                print(f"⚠️ Async save error: {e}")
+
+        threading.Thread(target=async_save, daemon=True).start()
+
+        print(f"✅ ResNet50: {len(detections_resnet50)} objects | ResNet101: {len(detections_resnet101)} objects")
+        return result_data
+
+    except Exception as e:
+        print(f"❌ Comparison error: {e}")
+        return {
+            "resnet50": {"detections": [], "num_detections": 0},
+            "resnet101": {"detections": [], "num_detections": 0},
+            "error": str(e)
+        }
+
+# ============================================================
+# Visualize Both Models Side by Side
+# ============================================================
+@app.post("/visualize-comparison")
+@torch.no_grad()
+def visualize_comparison(file: UploadFile = File(...)):
+    try:
+        contents = file.file.read()
+        tensor = preprocess_image(contents)
+        if device.type != "cpu":
+            tensor = tensor.to(device)
+
+        # Run both models
+        outputs_resnet50 = model_resnet50(tensor)[0]
+        outputs_resnet101 = model_resnet101(tensor)[0]
+
+        boxes_50, labels_50, scores_50 = filter_predictions(outputs_resnet50, settings.SCORE_THRESH)
+        boxes_101, labels_101, scores_101 = filter_predictions(outputs_resnet101, settings.SCORE_THRESH)
+
+        # Load and prepare images
+        image_50 = Image.open(io.BytesIO(contents)).convert("RGB")
+        image_101 = image_50.copy()
+
+        # Apply grayscale + darken
+        image_50 = ImageOps.grayscale(image_50)
+        enhancer = ImageEnhance.Brightness(image_50)
+        image_50 = enhancer.enhance(0.8).convert("RGB")
+
+        image_101 = ImageOps.grayscale(image_101)
+        enhancer = ImageEnhance.Brightness(image_101)
+        image_101 = enhancer.enhance(0.8).convert("RGB")
+
+        # Draw on ResNet50 image
+        draw_50 = ImageDraw.Draw(image_50)
+        font = ImageFont.load_default()
+        for b, l, s in zip(boxes_50, labels_50, scores_50):
+            x_min, y_min, x_max, y_max = map(float, b)
+            draw_50.rectangle([x_min, y_min, x_max, y_max], outline="red", width=3)
+            draw_50.text((x_min, max(y_min - 10, 0)),
+                        f"ID:{int(l)} | {s:.2f}", fill="yellow", font=font)
+
+        # Draw on ResNet101 image
+        draw_101 = ImageDraw.Draw(image_101)
+        for b, l, s in zip(boxes_101, labels_101, scores_101):
+            x_min, y_min, x_max, y_max = map(float, b)
+            draw_101.rectangle([x_min, y_min, x_max, y_max], outline="lime", width=3)
+            draw_101.text((x_min, max(y_min - 10, 0)),
+                         f"ID:{int(l)} | {s:.2f}", fill="cyan", font=font)
+
+        # Create side-by-side image
+        width, height = image_50.size
+        combined = Image.new('RGB', (width * 2 + 20, height + 60), color=(20, 20, 30))
+        
+        # Add labels
+        draw_combined = ImageDraw.Draw(combined)
+        title_font = ImageFont.load_default()
+        draw_combined.text((width // 2 - 50, 10), "ResNet50", fill="red", font=title_font)
+        draw_combined.text((width + width // 2 - 30, 10), "ResNet101", fill="lime", font=title_font)
+        
+        # Paste images
+        combined.paste(image_50, (0, 40))
+        combined.paste(image_101, (width + 20, 40))
+
+        # Return combined image
+        img_bytes = io.BytesIO()
+        combined.save(img_bytes, format="JPEG", quality=95)
+        img_bytes.seek(0)
+        return StreamingResponse(img_bytes, media_type="image/jpeg")
+
+    except Exception as e:
+        print(f"❌ Visualization error: {e}")
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
+# ============================================================
+# Save Comparison Results
+# ============================================================
+def save_comparison(image_bytes, comparison_data, image_filename="comparison.jpg"):
+    """Save comparison results for both models."""
+    comp_dir = os.path.join(RESULTS_DIR, "comparisons")
+    os.makedirs(comp_dir, exist_ok=True)
+
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    json_path = os.path.join(comp_dir, f"{ts}.json")
+    img_path = os.path.join(comp_dir, f"{ts}.jpg")
+
+    # Save image
+    with open(img_path, "wb") as f:
+        f.write(image_bytes)
+
+    # Save comparison JSON
+    comparison_data["timestamp"] = ts
+    comparison_data["filename"] = image_filename
+    
+    with open(json_path, "w") as f:
+        json.dump(comparison_data, f, indent=2)
+
+    print(f"✅ Comparison saved: {json_path}")
+
+# ============================================================
+# Get Comparison History
+# ============================================================
+@app.get("/comparisons/list")
+def list_comparisons():
+    """List all saved model comparisons."""
+    try:
+        comp_dir = os.path.join(RESULTS_DIR, "comparisons")
+        if not os.path.exists(comp_dir):
+            return {"items": []}
+        
+        items = []
+        for filename in os.listdir(comp_dir):
+            if filename.endswith(".json"):
+                timestamp = filename.replace(".json", "")
+                json_path = os.path.join(comp_dir, filename)
+                
+                try:
+                    with open(json_path, "r") as f:
+                        data = json.load(f)
+                    
+                    items.append({
+                        "timestamp": timestamp,
+                        "resnet50_detections": data.get("resnet50", {}).get("num_detections", 0),
+                        "resnet101_detections": data.get("resnet101", {}).get("num_detections", 0)
+                    })
+                except Exception as e:
+                    print(f"⚠️ Error reading {filename}: {e}")
+        
+        items.sort(key=lambda x: x["timestamp"], reverse=True)
+        return {"items": items}
+    
+    except Exception as e:
+        print(f"❌ Comparison list error: {e}")
+        return {"items": [], "error": str(e)}
+
+# ============================================================
+# Comparison Page Route
+# ============================================================
+@app.get("/comparison", response_class=HTMLResponse)
+def comparison_page(request: Request):
+    """Serve the model comparison interface."""
+    return templates.TemplateResponse("comparison.html", {"request": request})
