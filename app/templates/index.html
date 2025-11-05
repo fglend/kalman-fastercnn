@@ -265,7 +265,7 @@
             flex-wrap: wrap;
         }
         
-        /* ✅ GALLERY STYLES */
+        /* GALLERY STYLES */
         .gallery-header {
             display: flex;
             justify-content: space-between;
@@ -287,6 +287,7 @@
             border: 2px solid transparent;
             transition: all 0.3s ease;
             cursor: pointer;
+            position: relative;
         }
         .gallery-item:hover {
             border-color: #e63946;
@@ -332,8 +333,23 @@
             margin-bottom: 20px;
             opacity: 0.5;
         }
+        .play-overlay {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.7);
+            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            pointer-events: none;
+            font-size: 30px;
+        }
         
-        /* Modal for viewing full image */
+        /* Modal */
         .modal {
             display: none;
             position: fixed;
@@ -388,32 +404,6 @@
             border-radius: 5px;
             border-left: 3px solid #4caf50;
         }
-
-      #downloadOriginalBtn, #downloadImageBtn {
-            min-width: 230px;
-            border-radius: 8px;
-            padding: 12px 24px;
-            font-weight: 600;
-            font-size: 15px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-        #downloadOriginalBtn {
-            background: linear-gradient(135deg, #ff9800, #f57c00);
-            box-shadow: 0 4px 10px rgba(255,152,0,0.3);
-        }
-        #downloadOriginalBtn:hover {
-            background: linear-gradient(135deg, #f57c00, #e65100);
-            transform: translateY(-2px);
-        }
-        #downloadImageBtn {
-            background: linear-gradient(135deg, #4caf50, #2e7d32);
-            box-shadow: 0 4px 10px rgba(76,175,80,0.3);
-        }
-        #downloadImageBtn:hover {
-            background: linear-gradient(135deg, #2e7d32, #1b5e20);
-            transform: translateY(-2px);
-        }
     </style>
 </head>
 <body>
@@ -439,7 +429,7 @@
 
             <div class="camera-container" style="text-align:center; margin-bottom:20px;">
                 <div id="videoWrapper" style="position:relative; display:inline-block; max-width:500px; width:100%;">
-                    <video id="camera" autoplay playsinline muted style="width:100%; height:auto; border-radius:10px; display:none;"></video>
+                    <video id="camera" autoplay playsinline muted style="width:100%; aspect-ratio:1/1; border-radius:10px; object-fit:cover; display:none;"></video>
                     <canvas id="guideCanvas" style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; display:none;"></canvas>
                 </div>
                 <div id="capturePreview" style="display:none; margin-top:15px;">
@@ -526,11 +516,13 @@
             <div id="videoError"></div>
         </div>
 
-        <!-- ✅ GALLERY TAB -->
+        <!-- GALLERY TAB -->
         <div id="gallery" class="tab-content">
             <div class="gallery-header">
                 <h2 style="color: #e63946; margin: 0;">🖼️ Saved Detections</h2>
-                <div style="display: flex; gap: 10px;">
+                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                    <button id="showImagesBtn" class="tab-btn active">📷 Images</button>
+                    <button id="showVideosBtn" class="tab-btn">🎬 Videos</button>
                     <button id="refreshGalleryBtn" class="btn-orange">🔄 Refresh</button>
                 </div>
             </div>
@@ -552,9 +544,9 @@
         </div>
     </div>
 
-    <!-- ✅ MODAL FOR VIEWING FULL IMAGE -->
-    <div id="imageModal" class="modal">
-        <span class="modal-close">&times;</span>
+    <!-- MODAL -->
+    <div id="imageModal" class="modal" onclick="if(event.target.id==='imageModal') window.closeModal()">
+        <span class="modal-close" onclick="window.closeModal()">&times;</span>
         <div class="modal-content">
             <img id="modalImage" class="modal-image" alt="Full view">
             <div class="modal-info">
@@ -567,102 +559,62 @@
                     </div>
                 </div>
                 <div class="detection-list" id="modalDetections"></div>
-                <!-- ✅ Download Buttons -->
-                <div style="text-align: center; margin-top: 15px; display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
-                    <button id="downloadOriginalBtn" class="btn-orange">📷 Download Original Image</button>
-                    <button id="downloadImageBtn" class="download-btn">📥 Download Image with Bounding Boxes</button>
-                </div>
             </div>
         </div>
     </div>
 
     <script>
         const state = {
-            image: {
-                file: null,
-                cameraActive: false,
-                stream: null,
-                animationId: null
-            },
-            video: {
-                file: null,
-                resultBlob: null
-            },
-            gallery: {
-                items: []
-            }
+            image: { file: null, cameraActive: false, stream: null, animationId: null },
+            video: { file: null, resultBlob: null },
+            gallery: { items: [], mode: 'images' }
         };
 
         const $ = (id) => document.getElementById(id);
         const $$ = (selector) => document.querySelectorAll(selector);
-        
         const show = (el) => el.style.display = el.tagName === 'DIV' ? 'block' : 'inline-block';
         const hide = (el) => el.style.display = 'none';
-
         const showMessage = (container, message, type = 'error') => {
             container.innerHTML = `<div class="message ${type}">${message}</div>`;
         };
-
         const clearMessage = (container) => container.innerHTML = '';
 
-        // ============ TAB SWITCHING ============
-        $$('.tab-btn').forEach(btn => {
+        // TAB SWITCHING
+        $$('.tab-btn[data-tab]').forEach(btn => {
             btn.addEventListener('click', (e) => {
-                $$('.tab-btn').forEach(b => b.classList.remove('active'));
+                $$('.tab-btn[data-tab]').forEach(b => b.classList.remove('active'));
                 $$('.tab-content').forEach(c => c.classList.remove('active'));
                 e.target.classList.add('active');
                 $(e.target.dataset.tab).classList.add('active');
-                
-                // ✅ Load gallery when tab is opened
-                if (e.target.dataset.tab === 'gallery') {
-                    loadGallery();
-                }
+                if (e.target.dataset.tab === 'gallery') loadGallery();
             });
         });
 
-        // ============ DRAG & DROP ============
+        // DRAG & DROP
         const setupDragDrop = (uploadSection, fileInput, handleFile) => {
-            uploadSection.addEventListener('dragover', (e) => {
-                e.preventDefault();
-                uploadSection.classList.add('dragging');
-            });
-            uploadSection.addEventListener('dragleave', () => {
-                uploadSection.classList.remove('dragging');
-            });
+            uploadSection.addEventListener('dragover', (e) => { e.preventDefault(); uploadSection.classList.add('dragging'); });
+            uploadSection.addEventListener('dragleave', () => uploadSection.classList.remove('dragging'));
             uploadSection.addEventListener('drop', (e) => {
                 e.preventDefault();
                 uploadSection.classList.remove('dragging');
                 const files = e.dataTransfer.files;
-                if (files.length) {
-                    fileInput.files = files;
-                    handleFile();
-                }
+                if (files.length) { fileInput.files = files; handleFile(); }
             });
         };
 
-        // ============ IMAGE HANDLING ============
+        // IMAGE HANDLING
         const els = {
-            imageInput: $('imageInput'),
-            imageFileName: $('imageFileName'),
-            analyzeImageBtn: $('analyzeImageBtn'),
-            clearImageBtn: $('clearImageBtn'),
-            imageLoading: $('imageLoading'),
-            imageResults: $('imageResults'),
-            imageError: $('imageError'),
-            camera: $('camera'),
-            guideCanvas: $('guideCanvas'),
-            toggleCameraBtn: $('toggleCameraBtn'),
-            captureBtn: $('captureBtn'),
-            retakeBtn: $('retakeBtn'),
-            capturePreview: $('capturePreview'),
-            capturedImage: $('capturedImage')
+            imageInput: $('imageInput'), imageFileName: $('imageFileName'),
+            analyzeImageBtn: $('analyzeImageBtn'), clearImageBtn: $('clearImageBtn'),
+            imageLoading: $('imageLoading'), imageResults: $('imageResults'), imageError: $('imageError'),
+            camera: $('camera'), guideCanvas: $('guideCanvas'),
+            toggleCameraBtn: $('toggleCameraBtn'), captureBtn: $('captureBtn'), retakeBtn: $('retakeBtn'),
+            capturePreview: $('capturePreview'), capturedImage: $('capturedImage')
         };
 
         const setImageFile = (file, source = 'upload') => {
             state.image.file = file;
-            els.imageFileName.textContent = source === 'camera' 
-                ? '📸 Captured image from camera'
-                : `Selected: ${file.name}`;
+            els.imageFileName.textContent = source === 'camera' ? '📸 Captured image from camera' : `Selected: ${file.name}`;
             els.analyzeImageBtn.disabled = false;
             clearMessage(els.imageError);
         };
@@ -672,16 +624,13 @@
             els.imageInput.value = '';
             els.imageFileName.textContent = '';
             els.analyzeImageBtn.disabled = true;
-            hide(els.imageResults);
-            hide(els.imageLoading);
-            hide(els.capturePreview);
-            hide(els.retakeBtn);
+            hide(els.imageResults); hide(els.imageLoading); hide(els.capturePreview); hide(els.retakeBtn);
             show(els.toggleCameraBtn);
             els.toggleCameraBtn.textContent = '📸 Capture from Camera';
             clearMessage(els.imageError);
         };
 
-        // ============ CAMERA FUNCTIONS ============
+        // CAMERA FUNCTIONS
         const gctx = els.guideCanvas.getContext('2d');
 
         const stopCamera = () => {
@@ -694,20 +643,14 @@
                 state.image.animationId = null;
             }
             state.image.cameraActive = false;
-            hide(els.camera);
-            hide(els.guideCanvas);
-            hide(els.captureBtn);
+            hide(els.camera); hide(els.guideCanvas); hide(els.captureBtn);
         };
 
         const startCamera = async () => {
             try {
-                state.image.stream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: { ideal: 'environment' } }
-                });
+                state.image.stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } } });
                 els.camera.srcObject = state.image.stream;
-                show(els.camera);
-                show(els.guideCanvas);
-                show(els.captureBtn);
+                show(els.camera); show(els.guideCanvas); show(els.captureBtn);
                 state.image.cameraActive = true;
                 els.toggleCameraBtn.textContent = '⏹ Stop Camera';
                 drawGuides();
@@ -718,147 +661,103 @@
 
         const getCenterBrightness = (frame) => {
             const { data, width, height } = frame;
-            const bounds = {
-                cx1: Math.floor(width * 0.4),
-                cx2: Math.floor(width * 0.6),
-                cy1: Math.floor(width * 0.4),
-                cy2: Math.floor(width * 0.6)
-            };
-
+            const bounds = { cx1: Math.floor(width * 0.4), cx2: Math.floor(width * 0.6), cy1: Math.floor(height * 0.4), cy2: Math.floor(height * 0.6) };
             let sumCenter = 0, sumOuter = 0, countCenter = 0, countOuter = 0;
-
             for (let y = 0; y < height; y++) {
                 for (let x = 0; x < width; x++) {
                     const i = (y * width + x) * 4;
                     const brightness = (data[i] + data[i + 1] + data[i + 2]) / 765;
                     const inCenter = (x >= bounds.cx1 && x <= bounds.cx2 && y >= bounds.cy1 && y <= bounds.cy2);
-                    
-                    if (inCenter) {
-                        sumCenter += brightness;
-                        countCenter++;
-                    } else {
-                        sumOuter += brightness;
-                        countOuter++;
-                    }
+                    if (inCenter) { sumCenter += brightness; countCenter++; }
+                    else { sumOuter += brightness; countOuter++; }
                 }
             }
-            
             return Math.abs((sumOuter / countOuter) - (sumCenter / countCenter));
         };
 
         const drawGuides = () => {
             const tempCanvas = document.createElement('canvas');
             const tempCtx = tempCanvas.getContext('2d', { willReadFrequently: true });
-
             const draw = () => {
                 if (!state.image.cameraActive) return;
-
-                if (els.guideCanvas.width !== els.camera.clientWidth || 
-                    els.guideCanvas.height !== els.camera.clientHeight) {
+                if (els.guideCanvas.width !== els.camera.clientWidth || els.guideCanvas.height !== els.camera.clientHeight) {
                     els.guideCanvas.width = els.camera.clientWidth;
                     els.guideCanvas.height = els.camera.clientHeight;
                 }
-
-                const w = els.guideCanvas.width;
-                const h = els.guideCanvas.height;
-                const centerBox = { w: w * 0.4, h: h * 0.4, x: w * 0.3, y: h * 0.3 };
-
+                const w = els.guideCanvas.width, h = els.guideCanvas.height;
+                const centerX = w / 2, centerY = h / 2;
+                const radius = Math.min(w, h) / 2 - 5; // circle touches all four middle sides, with small padding
+                
                 gctx.clearRect(0, 0, w, h);
-                gctx.strokeStyle = "rgba(255,255,255,0.3)";
+                
+                // Draw grid lines (lighter)
+                gctx.strokeStyle = "rgba(255,255,255,0.2)"; 
                 gctx.lineWidth = 1;
                 for (let i = 1; i < 3; i++) {
-                    const x = (w / 3) * i;
-                    const y = (h / 3) * i;
-                    gctx.beginPath();
-                    gctx.moveTo(x, 0);
-                    gctx.lineTo(x, h);
-                    gctx.stroke();
-                    gctx.beginPath();
-                    gctx.moveTo(0, y);
-                    gctx.lineTo(w, y);
-                    gctx.stroke();
+                    const x = (w / 3) * i, y = (h / 3) * i;
+                    gctx.beginPath(); gctx.moveTo(x, 0); gctx.lineTo(x, h); gctx.stroke();
+                    gctx.beginPath(); gctx.moveTo(0, y); gctx.lineTo(w, y); gctx.stroke();
                 }
-
+                
                 if (els.camera.readyState === els.camera.HAVE_ENOUGH_DATA) {
-                    tempCanvas.width = 64;
-                    tempCanvas.height = 48;
+                    tempCanvas.width = 64; tempCanvas.height = 48;
                     tempCtx.drawImage(els.camera, 0, 0, 64, 48);
-
                     const frame = tempCtx.getImageData(0, 0, 64, 48);
                     const isCentered = getCenterBrightness(frame) > 0.25;
-
+                    
+                    // Draw simple circle guide
                     gctx.strokeStyle = isCentered ? "rgba(0,255,0,0.9)" : "rgba(230,57,70,0.9)";
                     gctx.lineWidth = 3;
-                    gctx.strokeRect(centerBox.x, centerBox.y, centerBox.w, centerBox.h);
-
-                    gctx.font = "18px Segoe UI";
-                    gctx.fillStyle = "rgba(255,255,255,0.8)";
-                    gctx.fillText(isCentered ? "✅ Ready to capture" : "Align object to center box", 20, 30);
+                    gctx.beginPath();
+                    gctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+                    gctx.stroke();
+                    
+                    // Draw status text
+                    gctx.font = "bold 18px Segoe UI"; 
+                    gctx.fillStyle = "rgba(255,255,255,0.95)";
+                    gctx.textAlign = "center";
+                    const statusText = isCentered ? "✅ Ready to capture" : "⚠️ Center the object";
+                    gctx.fillText(statusText, centerX, centerY + radius + 35);
                 }
-
                 state.image.animationId = requestAnimationFrame(draw);
             };
             draw();
         };
 
-        // ============ IMAGE ANALYSIS ============
+        // IMAGE ANALYSIS
         const analyzeImage = async () => {
             if (!state.image.file) return;
-
-            show(els.imageLoading);
-            hide(els.imageResults);
-            clearMessage(els.imageError);
-
+            show(els.imageLoading); hide(els.imageResults); clearMessage(els.imageError);
             const formData = new FormData();
             formData.append('file', state.image.file);
-
             try {
                 const [predRes, visRes] = await Promise.all([
                     fetch('/predict-image', { method: 'POST', body: formData }),
                     fetch('/visualize-image', { method: 'POST', body: formData })
                 ]);
-
                 const predData = await predRes.json();
                 const visBlob = await visRes.blob();
-
                 $('originalImage').src = URL.createObjectURL(state.image.file);
                 $('visualizedImage').src = URL.createObjectURL(visBlob);
-
-                $('imageStats').innerHTML = `
-                    <div class="stat-card">
-                        <div class="stat-value">${predData.num_detections}</div>
-                        <div class="stat-label">Objects Detected</div>
-                    </div>
-                `;
-
-                const info = $('imageInfo');
-                info.innerHTML = predData.detections.length > 0
-                    ? '<h4>Detection Results:</h4>' + predData.detections
-                        .map((d, i) => `<div>#${i+1} | ID:${d.label_id} | Score:${d.score.toFixed(4)} | Box:[${Math.round(d.x_min)}, ${Math.round(d.y_min)}, ${Math.round(d.x_max)}, ${Math.round(d.y_max)}]</div>`)
-                        .join('')
+                $('imageStats').innerHTML = `<div class="stat-card"><div class="stat-value">${predData.num_detections}</div><div class="stat-label">Objects Detected</div></div>`;
+                $('imageInfo').innerHTML = predData.detections.length > 0
+                    ? '<h4>Detection Results:</h4>' + predData.detections.map((d, i) => `<div>#${i+1} | ID:${d.label_id} | Score:${d.score.toFixed(4)} | Box:[${Math.round(d.x_min)}, ${Math.round(d.y_min)}, ${Math.round(d.x_max)}, ${Math.round(d.y_max)}]</div>`).join('')
                     : '<h4>No objects detected</h4>';
-
                 hide(els.imageLoading);
                 els.imageResults.style.display = 'grid';
             } catch (e) {
                 hide(els.imageLoading);
                 showMessage(els.imageError, `Error: ${e.message}`);
-                console.error(e);
             }
         };
 
-        // ============ VIDEO ANALYSIS ============
+        // VIDEO ANALYSIS
         const videoEls = {
-            input: $('videoInput'),
-            fileName: $('videoFileName'),
-            analyzeBtn: $('analyzeVideoBtn'),
-            clearBtn: $('clearVideoBtn'),
-            loading: $('videoLoading'),
-            previewSection: $('videoPreviewSection'),
-            player: $('analyzedVideoPlayer'),
-            error: $('videoError'),
-            downloadBtn: $('downloadVideoBtn'),
-            analyzeAnotherBtn: $('analyzeAnotherBtn')
+            input: $('videoInput'), fileName: $('videoFileName'),
+            analyzeBtn: $('analyzeVideoBtn'), clearBtn: $('clearVideoBtn'),
+            loading: $('videoLoading'), previewSection: $('videoPreviewSection'),
+            player: $('analyzedVideoPlayer'), error: $('videoError'),
+            downloadBtn: $('downloadVideoBtn'), analyzeAnotherBtn: $('analyzeAnotherBtn')
         };
 
         const setVideoFile = (file) => {
@@ -884,47 +783,37 @@
 
         const analyzeVideo = async () => {
             if (!state.video.file) return;
-
             show(videoEls.loading);
             hide(videoEls.previewSection);
             clearMessage(videoEls.error);
-
             const progressContainer = $('progressContainer');
             const progressBar = $('progressBar');
             const progressText = $('progressText');
             show(progressContainer);
-
             const formData = new FormData();
             formData.append('file', state.video.file);
-
             try {
                 const startRes = await fetch('/start-analyze', { method: 'POST', body: formData });
                 const { job_id } = await startRes.json();
                 if (!job_id) throw new Error('Failed to start analysis');
-
                 const poll = setInterval(async () => {
                     const res = await fetch(`/progress/${job_id}`);
                     const data = await res.json();
-
                     progressBar.style.width = `${data.progress}%`;
                     progressText.textContent = `Processing: ${data.progress.toFixed(1)}%`;
-
                     if (data.status === 'error') {
                         clearInterval(poll);
                         hide(progressContainer);
                         hide(videoEls.loading);
                         showMessage(videoEls.error, `Error: ${data.error}`);
                     }
-
                     if (data.status === 'done') {
                         clearInterval(poll);
                         hide(progressContainer);
                         hide(videoEls.loading);
-
                         const videoRes = await fetch(`/result/${job_id}`);
                         const blob = await videoRes.blob();
                         state.video.resultBlob = blob;
-                        
                         const url = URL.createObjectURL(blob);
                         videoEls.player.src = url;
                         show(videoEls.previewSection);
@@ -938,195 +827,202 @@
             }
         };
 
-        // ============ GALLERY FUNCTIONS ============
+        // GALLERY FUNCTIONS
         const loadGallery = async () => {
+            if (state.gallery.mode === 'images') {
+                await loadImageGallery();
+            } else {
+                await loadVideoGallery();
+            }
+        };
+
+        const loadImageGallery = async () => {
             const galleryContainer = $('galleryContainer');
             const galleryLoading = $('galleryLoading');
             const galleryError = $('galleryError');
-
             show(galleryLoading);
             clearMessage(galleryError);
-
             try {
                 const res = await fetch('/gallery/list');
                 const data = await res.json();
-
                 hide(galleryLoading);
-
                 if (!data.items || data.items.length === 0) {
-                    galleryContainer.innerHTML = `
-                        <div class="empty-gallery">
-                            <div class="empty-gallery-icon">📷</div>
-                            <h3>No saved detections yet</h3>
-                            <p>Analyze some images to see them here!</p>
-                        </div>
-                    `;
+                    galleryContainer.innerHTML = `<div class="empty-gallery"><div class="empty-gallery-icon">📷</div><h3>No saved images yet</h3><p>Analyze some images to see them here!</p></div>`;
                     return;
                 }
-
                 state.gallery.items = data.items;
-                renderGallery(data.items);
+                renderImageGallery(data.items);
             } catch (e) {
                 hide(galleryLoading);
                 showMessage(galleryError, `Failed to load gallery: ${e.message}`);
             }
         };
 
-        const renderGallery = (items) => {
+        const loadVideoGallery = async () => {
             const galleryContainer = $('galleryContainer');
-            
-            galleryContainer.innerHTML = `
-                <div class="gallery-grid">
-                    ${items.map(item => `
-                        <div class="gallery-item" onclick="openModal('${item.timestamp}')">
-                            <img class="gallery-image" 
-                                 src="/gallery/image/${item.timestamp}" 
-                                 alt="Detection ${item.timestamp}"
-                                 loading="lazy">
-                            <div class="gallery-info">
-                                <h4>${formatTimestamp(item.timestamp)}</h4>
-                                <div class="gallery-meta">
-                                    <span>📅 ${new Date(parseTimestamp(item.timestamp)).toLocaleDateString()}</span>
-                                    <span>🕐 ${new Date(parseTimestamp(item.timestamp)).toLocaleTimeString()}</span>
-                                </div>
-                                <div class="gallery-detections">
-                                    ${item.num_detections} object${item.num_detections !== 1 ? 's' : ''} detected
-                                </div>
-                            </div>
-                        </div>
-                    `).join('')}
-                </div>
-            `;
+            const galleryLoading = $('galleryLoading');
+            const galleryError = $('galleryError');
+            show(galleryLoading);
+            clearMessage(galleryError);
+            try {
+                const res = await fetch('/gallery/videos/list');
+                const data = await res.json();
+                hide(galleryLoading);
+                if (!data.items || data.items.length === 0) {
+                    galleryContainer.innerHTML = `<div class="empty-gallery"><div class="empty-gallery-icon">🎬</div><h3>No saved videos yet</h3><p>Analyze some videos to see them here!</p></div>`;
+                    return;
+                }
+                state.gallery.items = data.items;
+                renderVideoGallery(data.items);
+            } catch (e) {
+                hide(galleryLoading);
+                showMessage(galleryError, `Failed to load video gallery: ${e.message}`);
+            }
         };
 
-        const formatTimestamp = (ts) => {
-            return ts.replace(/(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})(\d{2})/, '$1-$2-$3 $4:$5:$6');
+        const renderImageGallery = (items) => {
+            $('galleryContainer').innerHTML = `<div class="gallery-grid">${items.map(item => `
+                <div class="gallery-item" onclick="openModal('${item.timestamp}')">
+                    <img class="gallery-image" src="/gallery/image/${item.timestamp}" alt="Detection ${item.timestamp}" loading="lazy">
+                    <div class="gallery-info">
+                        <h4>${formatTimestamp(item.timestamp)}</h4>
+                        <div class="gallery-meta">
+                            <span>📅 ${new Date(parseTimestamp(item.timestamp)).toLocaleDateString()}</span>
+                            <span>🕐 ${new Date(parseTimestamp(item.timestamp)).toLocaleTimeString()}</span>
+                        </div>
+                        <div class="gallery-detections">${item.num_detections} object${item.num_detections !== 1 ? 's' : ''} detected</div>
+                    </div>
+                </div>
+            `).join('')}</div>`;
         };
+
+        const renderVideoGallery = (items) => {
+            $('galleryContainer').innerHTML = `<div class="gallery-grid">${items.map(item => `
+                <div class="gallery-item" onclick="openVideoModal('${item.timestamp}')">
+                    <img class="gallery-image" src="/gallery/videos/thumbnail/${item.timestamp}" alt="Video ${item.timestamp}" loading="lazy">
+                    <div class="play-overlay">▶️</div>
+                    <div class="gallery-info">
+                        <h4>${formatTimestamp(item.timestamp)}</h4>
+                        <div class="gallery-meta">
+                            <span>⏱️ ${item.duration}s</span>
+                            <span>🎞️ ${item.total_frames} frames</span>
+                        </div>
+                        <div class="gallery-detections">${item.total_detections} total detections</div>
+                    </div>
+                </div>
+            `).join('')}</div>`;
+        };
+
+        const formatTimestamp = (ts) => ts.replace(/(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})(\d{2})/, '$1-$2-$3 $4:$5:$6');
 
         const parseTimestamp = (ts) => {
             const match = ts.match(/(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})(\d{2})/);
-            if (match) {
-                return new Date(match[1], match[2]-1, match[3], match[4], match[5], match[6]);
-            }
-            return new Date();
+            return match ? new Date(match[1], match[2]-1, match[3], match[4], match[5], match[6]) : new Date();
         };
 
         const openModal = async (timestamp) => {
             const modal = $('imageModal');
             const modalImage = $('modalImage');
-            const modalTitle = $('modalTitle');
-            const modalTimestamp = $('modalTimestamp');
-            const modalDetCount = $('modalDetCount');
-            const modalDetections = $('modalDetections');
-
             try {
-                // Load visualized image
                 modalImage.src = `/gallery/visualize/${timestamp}`;
-                
-                // Load detection data
                 const res = await fetch(`/gallery/json/${timestamp}`);
                 const data = await res.json();
-
-                modalTitle.textContent = `Detection Analysis`;
-                modalTimestamp.textContent = formatTimestamp(timestamp);
-                modalDetCount.textContent = data.num_detections || 0;
-
-                if (data.detections && data.detections.length > 0) {
-                    modalDetections.innerHTML = data.detections.map((d, i) => `
-                        <div class="detection-item">
-                            <strong>Object #${i + 1}</strong><br>
-                            Label ID: ${d.label_id} | 
-                            Confidence: ${(d.score * 100).toFixed(1)}%<br>
-                            Box: [${Math.round(d.x_min)}, ${Math.round(d.y_min)}, ${Math.round(d.x_max)}, ${Math.round(d.y_max)}]
-                        </div>
-                    `).join('');
-                } else {
-                    modalDetections.innerHTML = '<p style="color: #666;">No detections found</p>';
-                }
-
+                $('modalTitle').textContent = `Detection Analysis`;
+                $('modalTimestamp').textContent = formatTimestamp(timestamp);
+                $('modalDetCount').textContent = data.num_detections || 0;
+                $('modalDetections').innerHTML = data.detections && data.detections.length > 0
+                    ? data.detections.map((d, i) => `<div class="detection-item"><strong>Object #${i + 1}</strong><br>Label ID: ${d.label_id} | Confidence: ${(d.score * 100).toFixed(1)}%<br>Box: [${Math.round(d.x_min)}, ${Math.round(d.y_min)}, ${Math.round(d.x_max)}, ${Math.round(d.y_max)}]</div>`).join('')
+                    : '<p style="color: #666;">No detections found</p>';
                 modal.style.display = 'block';
             } catch (e) {
                 alert('Failed to load image details: ' + e.message);
             }
         };
 
-        const closeModal = () => {
-            $('imageModal').style.display = 'none';
+        const openVideoModal = async (timestamp) => {
+            const modal = $('imageModal');
+            const modalImage = $('modalImage');
+            try {
+                const videoHTML = `<video controls autoplay style="width:100%; max-height:70vh; border-radius:10px; background:#000;"><source src="/gallery/videos/stream/${timestamp}" type="video/mp4">Your browser does not support video playback.</video>`;
+                modalImage.style.display = 'none';
+                modalImage.insertAdjacentHTML('afterend', '<div id="videoPlayerContainer">' + videoHTML + '</div>');
+                const res = await fetch(`/gallery/videos/json/${timestamp}`);
+                const data = await res.json();
+                $('modalTitle').textContent = `Video Analysis`;
+                $('modalTimestamp').textContent = formatTimestamp(timestamp);
+                $('modalDetCount').textContent = data.total_detections || 0;
+                $('modalDetections').innerHTML = `
+                    <div style="display:grid; grid-template-columns:repeat(2, 1fr); gap:15px; margin-bottom:20px;">
+                        <div class="stat-card"><div class="stat-value">${data.total_frames}</div><div class="stat-label">Total Frames</div></div>
+                        <div class="stat-card"><div class="stat-value">${data.frames_with_detections}</div><div class="stat-label">Frames with Detections</div></div>
+                        <div class="stat-card"><div class="stat-value">${data.fps.toFixed(1)}</div><div class="stat-label">FPS</div></div>
+                        <div class="stat-card"><div class="stat-value">${(data.total_frames / data.fps).toFixed(1)}s</div><div class="stat-label">Duration</div></div>
+                    </div>
+                    <h4 style="color: #e63946; margin-top:20px;">Detection Timeline (First 100 frames)</h4>
+                    ${data.detection_summary && data.detection_summary.length > 0 
+                        ? data.detection_summary.map(d => `<div class="detection-item">Frame #${d.frame}: ${d.count} object${d.count !== 1 ? 's' : ''} detected</div>`).join('')
+                        : '<p style="color: #666;">No detection timeline available</p>'}
+                `;
+                modal.style.display = 'block';
+            } catch (e) {
+                alert('Failed to load video: ' + e.message);
+            }
         };
 
-        // ============ EVENT LISTENERS ============
-        
-        setupDragDrop(
-            document.querySelector('[data-upload="image"]'),
-            els.imageInput,
-            () => {
-                const file = els.imageInput.files[0];
-                if (file) setImageFile(file, 'upload');
-            }
-        );
-        
+        window.closeModal = () => {
+            const modal = $('imageModal');
+            modal.style.display = 'none';
+            const videoContainer = document.getElementById('videoPlayerContainer');
+            if (videoContainer) videoContainer.remove();
+            $('modalImage').style.display = 'block';
+        };
+
+        // EVENT LISTENERS
+        setupDragDrop(document.querySelector('[data-upload="image"]'), els.imageInput, () => {
+            const file = els.imageInput.files[0];
+            if (file) setImageFile(file, 'upload');
+        });
         els.imageInput.addEventListener('change', () => {
             const file = els.imageInput.files[0];
             if (file) setImageFile(file, 'upload');
         });
-
-        els.toggleCameraBtn.addEventListener('click', () => {
-            state.image.cameraActive ? stopCamera() : startCamera();
-        });
-
+        els.toggleCameraBtn.addEventListener('click', () => state.image.cameraActive ? stopCamera() : startCamera());
         els.captureBtn.addEventListener('click', () => {
             const tempCanvas = document.createElement('canvas');
             tempCanvas.width = els.camera.videoWidth;
             tempCanvas.height = els.camera.videoHeight;
             const ctx = tempCanvas.getContext('2d');
             ctx.drawImage(els.camera, 0, 0, tempCanvas.width, tempCanvas.height);
-
             tempCanvas.toBlob((blob) => {
                 const file = new File([blob], "captured.jpg", { type: "image/jpeg" });
                 setImageFile(file, 'camera');
-                
                 els.capturedImage.src = URL.createObjectURL(blob);
                 show(els.capturePreview);
-                hide(els.camera);
-                hide(els.guideCanvas);
-                hide(els.captureBtn);
-                show(els.retakeBtn);
-                hide(els.toggleCameraBtn);
-                
+                hide(els.camera); hide(els.guideCanvas); hide(els.captureBtn);
+                show(els.retakeBtn); hide(els.toggleCameraBtn);
                 stopCamera();
             }, "image/jpeg", 0.9);
         });
-
         els.retakeBtn.addEventListener('click', () => {
-            hide(els.capturePreview);
-            hide(els.retakeBtn);
-            show(els.toggleCameraBtn);
+            hide(els.capturePreview); hide(els.retakeBtn); show(els.toggleCameraBtn);
             els.imageFileName.textContent = '';
             state.image.file = null;
             els.analyzeImageBtn.disabled = true;
             startCamera();
         });
-
         els.analyzeImageBtn.addEventListener('click', analyzeImage);
         els.clearImageBtn.addEventListener('click', clearImageState);
 
-        setupDragDrop(
-            document.querySelector('[data-upload="video"]'),
-            videoEls.input,
-            () => {
-                const file = videoEls.input.files[0];
-                if (file) setVideoFile(file);
-            }
-        );
-        
+        setupDragDrop(document.querySelector('[data-upload="video"]'), videoEls.input, () => {
+            const file = videoEls.input.files[0];
+            if (file) setVideoFile(file);
+        });
         videoEls.input.addEventListener('change', () => {
             const file = videoEls.input.files[0];
             if (file) setVideoFile(file);
         });
-
         videoEls.analyzeBtn.addEventListener('click', analyzeVideo);
         videoEls.clearBtn.addEventListener('click', clearVideoState);
-
         videoEls.downloadBtn.addEventListener('click', () => {
             if (state.video.resultBlob) {
                 const url = URL.createObjectURL(state.video.resultBlob);
@@ -1137,52 +1033,26 @@
                 URL.revokeObjectURL(url);
             }
         });
-
         videoEls.analyzeAnotherBtn.addEventListener('click', clearVideoState);
 
         // Gallery events
         $('refreshGalleryBtn').addEventListener('click', loadGallery);
-
-        // Modal events
-        $('imageModal').querySelector('.modal-close').addEventListener('click', closeModal);
-        $('imageModal').addEventListener('click', (e) => {
-            if (e.target.id === 'imageModal') closeModal();
+        $('showImagesBtn').addEventListener('click', () => {
+            state.gallery.mode = 'images';
+            $('showImagesBtn').classList.add('active');
+            $('showVideosBtn').classList.remove('active');
+            loadGallery();
+        });
+        $('showVideosBtn').addEventListener('click', () => {
+            state.gallery.mode = 'videos';
+            $('showVideosBtn').classList.add('active');
+            $('showImagesBtn').classList.remove('active');
+            loadGallery();
         });
 
-        // =============== DOWNLOAD ORIGINAL IMAGE =================
-        $('downloadOriginalBtn').addEventListener('click', async () => {
-            const timestamp = $('modalTimestamp').textContent.replace(/[^0-9_]/g, '');
-            const url = `/gallery/image/${timestamp}`;  // exact same endpoint as preview
-            try {
-                const res = await fetch(url);
-                if (!res.ok) throw new Error('Failed to fetch image');
-                const blob = await res.blob();
-                const a = document.createElement('a');
-                a.href = URL.createObjectURL(blob);
-                a.download = `original_${timestamp}.jpg`;
-                a.click();
-                URL.revokeObjectURL(a.href);
-            } catch (err) {
-                alert('⚠️ Failed to download original image: ' + err.message);
-            }
-        });
-
-        // =============== DOWNLOAD IMAGE WITH BOUNDING BOXES =================
-        $('downloadImageBtn').addEventListener('click', async () => {
-            const timestamp = $('modalTimestamp').textContent.replace(/[^0-9_]/g, '');
-            const url = `/gallery/visualize/${timestamp}`;  // exact same endpoint used in modal preview
-            try {
-                const res = await fetch(url);
-                if (!res.ok) throw new Error('Failed to fetch detection image');
-                const blob = await res.blob();
-                const a = document.createElement('a');
-                a.href = URL.createObjectURL(blob);
-                a.download = `detections_${timestamp}.jpg`;
-                a.click();
-                URL.revokeObjectURL(a.href);
-            } catch (err) {
-                alert('⚠️ Failed to download image with bounding boxes: ' + err.message);
-            }
+        // Keyboard shortcut (ESC to close modal)
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && $('imageModal').style.display === 'block') window.closeModal();
         });
     </script>
 </body>
