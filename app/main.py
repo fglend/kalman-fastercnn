@@ -52,72 +52,85 @@ app.add_middleware(
 # Model Loader - Load Both Models from .pth files
 # ============================================================
 def load_model_from_checkpoint(checkpoint_path, backbone="resnet50", num_classes=91):
-    """Load a trained Faster R-CNN model from checkpoint."""
+    """Load a trained Faster R-CNN FPN model from checkpoint."""
     import torchvision
-    from torchvision.models.detection import FasterRCNN
-    from torchvision.models.detection.rpn import AnchorGenerator
+    from torchvision.models.detection import fasterrcnn_resnet50_fpn, fasterrcnn_resnet50_fpn_v2
     
-    # Create model based on backbone
+    # Create model based on backbone using torchvision's FPN models
+    print(f"Creating Faster R-CNN with {backbone.upper()} + FPN backbone...")
+    
     if backbone == "resnet50":
-        from torchvision.models import resnet50, ResNet50_Weights
-        backbone_model = resnet50(weights=ResNet50_Weights.DEFAULT)
-        backbone_model = torch.nn.Sequential(*list(backbone_model.children())[:-2])
-        backbone_model.out_channels = 2048
+        # Use the standard FasterRCNN ResNet50 FPN model
+        try:
+            # Try to use torchvision's built-in model
+            from torchvision.models.detection import fasterrcnn_resnet50_fpn
+            model = fasterrcnn_resnet50_fpn(weights=None, num_classes=num_classes)
+        except Exception as e:
+            print(f"⚠️ Warning: Could not create model with standard method: {e}")
+            # Fallback to custom creation
+            from torchvision.models.detection.faster_rcnn import FasterRCNN
+            from torchvision.models.detection.backbone_utils import resnet_fpn_backbone
+            backbone_model = resnet_fpn_backbone('resnet50', weights=None)
+            model = FasterRCNN(backbone_model, num_classes=num_classes)
+            
     elif backbone == "resnet101":
-        from torchvision.models import resnet101, ResNet101_Weights
-        backbone_model = resnet101(weights=ResNet101_Weights.DEFAULT)
-        backbone_model = torch.nn.Sequential(*list(backbone_model.children())[:-2])
-        backbone_model.out_channels = 2048
+        # Use FasterRCNN ResNet101 FPN model
+        try:
+            from torchvision.models.detection.faster_rcnn import FasterRCNN
+            from torchvision.models.detection.backbone_utils import resnet_fpn_backbone
+            backbone_model = resnet_fpn_backbone('resnet101', weights=None)
+            model = FasterRCNN(backbone_model, num_classes=num_classes)
+        except Exception as e:
+            print(f"⚠️ Warning: Error creating ResNet101 model: {e}")
+            raise
     else:
         raise ValueError(f"Unsupported backbone: {backbone}")
     
-    # Create anchor generator
-    anchor_generator = AnchorGenerator(
-        sizes=((32, 64, 128, 256, 512),),
-        aspect_ratios=((0.5, 1.0, 2.0),)
-    )
-    
-    # Create ROI pooler
-    roi_pooler = torchvision.ops.MultiScaleRoIAlign(
-        featmap_names=['0'],
-        output_size=7,
-        sampling_ratio=2
-    )
-    
-    # Create Faster R-CNN model
-    model = FasterRCNN(
-        backbone_model,
-        num_classes=num_classes,
-        rpn_anchor_generator=anchor_generator,
-        box_roi_pool=roi_pooler
-    )
-    
     # Load checkpoint
     print(f"Loading checkpoint from: {checkpoint_path}")
-    checkpoint = torch.load(checkpoint_path, map_location=device)
+    checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
     
     # Handle different checkpoint formats
     if isinstance(checkpoint, dict):
         if 'model_state_dict' in checkpoint:
-            model.load_state_dict(checkpoint['model_state_dict'])
-            print(f"✅ Loaded model_state_dict (Epoch: {checkpoint.get('epoch', 'N/A')})")
+            state_dict = checkpoint['model_state_dict']
+            print(f"📋 Found 'model_state_dict' (Epoch: {checkpoint.get('epoch', 'N/A')})")
         elif 'state_dict' in checkpoint:
-            model.load_state_dict(checkpoint['state_dict'])
-            print(f"✅ Loaded state_dict")
+            state_dict = checkpoint['state_dict']
+            print(f"📋 Found 'state_dict'")
         else:
-            model.load_state_dict(checkpoint)
-            print(f"✅ Loaded checkpoint dict")
+            state_dict = checkpoint
+            print(f"📋 Using checkpoint as state_dict")
     else:
-        model.load_state_dict(checkpoint)
-        print(f"✅ Loaded checkpoint")
+        state_dict = checkpoint
+        print(f"📋 Checkpoint is direct state_dict")
+    
+    # Load state dict with strict=False to allow minor mismatches
+    try:
+        missing_keys, unexpected_keys = model.load_state_dict(state_dict, strict=False)
+        
+        if missing_keys:
+            print(f"⚠️ Missing keys: {len(missing_keys)} (this is usually okay)")
+            if len(missing_keys) < 10:
+                for key in missing_keys[:5]:
+                    print(f"   - {key}")
+        
+        if unexpected_keys:
+            print(f"⚠️ Unexpected keys: {len(unexpected_keys)} (this is usually okay)")
+            if len(unexpected_keys) < 10:
+                for key in unexpected_keys[:5]:
+                    print(f"   - {key}")
+        
+        print(f"✅ Checkpoint loaded successfully")
+        
+    except Exception as e:
+        print(f"❌ Error loading state dict: {e}")
+        raise
     
     model.to(device)
     model.eval()
     return model
 
-# ============================================================
-# Model Loader
-# ============================================================
 @app.on_event("startup")
 def startup_event():
     global model_resnet50, model_resnet101
@@ -136,6 +149,10 @@ def startup_event():
             backbone="resnet50",
             num_classes=NUM_CLASSES
         )
+         # ✅ Allow more detections per image
+        model_resnet50.roi_heads.detections_per_img = 350
+        model_resnet50.rpn.post_nms_top_n_test = 2000
+        model_resnet50.rpn.pre_nms_top_n_test = 2000
         print(f"✅ ResNet50 model loaded successfully")
     except Exception as e:
         print(f"❌ Failed to load ResNet50: {e}")
@@ -149,6 +166,9 @@ def startup_event():
             backbone="resnet101", 
             num_classes=NUM_CLASSES
         )
+        model_resnet101.roi_heads.detections_per_img = 350
+        model_resnet101.rpn.post_nms_top_n_test = 2000
+        model_resnet101.rpn.pre_nms_top_n_test = 2000
         print(f"✅ ResNet101 model loaded successfully")
     except Exception as e:
         print(f"❌ Failed to load ResNet101: {e}")
@@ -449,7 +469,7 @@ def predict_image(file: UploadFile = File(...)):
         if device.type != "cpu":
             tensor = tensor.to(device)
 
-        outputs = model(tensor)[0]
+        outputs = model_resnet101(tensor)[0]
         boxes, labels, scores = filter_predictions(outputs, settings.SCORE_THRESH)
 
         detections = [
@@ -503,7 +523,7 @@ def visualize_image(file: UploadFile = File(...)):
         if device.type != "cpu":
             tensor = tensor.to(device)
 
-        outputs = model(tensor)[0]
+        outputs = model_resnet101(tensor)[0]
         boxes, labels, scores = filter_predictions(outputs, settings.SCORE_THRESH)
 
         # ✅ Convert to grayscale and darken

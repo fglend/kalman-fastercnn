@@ -3,666 +3,359 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🔬 Model Comparison | Faster R-CNN</title>
+    <title>📊 Model Comparison - Faster R-CNN</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+            background: linear-gradient(135deg, #0b0b0b, #1a1a2e);
             color: #fff;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            min-height: 100vh;
+            font-family: 'Segoe UI', Arial, sans-serif;
             padding: 20px;
         }
-        .container { 
-            max-width: 1800px; 
-            margin: 0 auto; 
-        }
-        
-        /* Header */
-        .header {
+        .container { max-width: 1600px; margin: 0 auto; }
+        h1 {
             text-align: center;
-            padding: 30px 20px;
-            background: rgba(255,255,255,0.05);
-            border-radius: 15px;
+            color: #e63946;
             margin-bottom: 30px;
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255,255,255,0.1);
+            font-size: 28px;
         }
-        .header h1 {
-            font-size: 42px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            margin-bottom: 10px;
-            font-weight: 700;
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+            justify-content: center;
         }
-        .header p {
-            color: #aaa;
+        .tab-btn {
+            background: rgba(230, 57, 70, 0.2);
+            color: #fff;
+            border: 2px solid #e63946;
+            border-radius: 8px;
+            padding: 12px 24px;
             font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
         }
-        
-        /* Model Info Cards */
-        .model-info-section {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
-            margin-bottom: 30px;
+        .tab-btn.active {
+            background: #e63946;
+            box-shadow: 0 4px 15px rgba(230, 57, 70, 0.4);
         }
-        .model-info-card {
+        .tab-btn:hover { transform: translateY(-2px); }
+        .tab-content {
+            display: none;
             background: rgba(255,255,255,0.05);
             border-radius: 12px;
-            padding: 20px;
-            border: 2px solid;
+            padding: 30px;
             backdrop-filter: blur(10px);
-            transition: all 0.3s ease;
         }
-        .model-info-card:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-        }
-        .model-info-card.resnet50 {
-            border-color: #f093fb;
-            background: linear-gradient(135deg, rgba(240, 147, 251, 0.1), rgba(245, 87, 108, 0.1));
-        }
-        .model-info-card.resnet101 {
-            border-color: #4facfe;
-            background: linear-gradient(135deg, rgba(79, 172, 254, 0.1), rgba(0, 242, 234, 0.1));
-        }
-        .model-info-card h3 {
-            font-size: 24px;
-            margin-bottom: 10px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        .model-badge {
-            padding: 5px 12px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: 600;
-        }
-        .model-badge.resnet50 {
-            background: linear-gradient(135deg, #f093fb, #f5576c);
-        }
-        .model-badge.resnet101 {
-            background: linear-gradient(135deg, #4facfe, #00f2ea);
-        }
-        .model-info-card ul {
-            list-style: none;
-            color: #ccc;
-        }
-        .model-info-card ul li {
-            padding: 5px 0;
-            font-size: 14px;
-        }
-        .model-info-card ul li::before {
-            content: "▸ ";
-            color: #4facfe;
-            font-weight: bold;
-        }
-        
-        /* Upload Section */
+        .tab-content.active { display: block; }
         .upload-section {
-            background: rgba(255,255,255,0.05);
-            border: 3px dashed rgba(102, 126, 234, 0.5);
-            border-radius: 15px;
-            padding: 60px 40px;
+            background: rgba(0,0,0,0.3);
+            border: 2px dashed #e63946;
+            border-radius: 10px;
+            padding: 40px;
             text-align: center;
-            margin-bottom: 30px;
+            margin-bottom: 20px;
             cursor: pointer;
             transition: all 0.3s ease;
-            backdrop-filter: blur(10px);
-            position: relative;
-            overflow: hidden;
-        }
-        .upload-section::before {
-            content: '';
-            position: absolute;
-            top: -50%;
-            left: -50%;
-            width: 200%;
-            height: 200%;
-            background: radial-gradient(circle, rgba(102, 126, 234, 0.1) 0%, transparent 70%);
-            animation: pulse 3s ease-in-out infinite;
-        }
-        @keyframes pulse {
-            0%, 100% { transform: scale(1); opacity: 0.5; }
-            50% { transform: scale(1.1); opacity: 0.8; }
         }
         .upload-section:hover {
-            background: rgba(102, 126, 234, 0.1);
-            border-color: #667eea;
-            transform: translateY(-5px);
-            box-shadow: 0 15px 40px rgba(102, 126, 234, 0.3);
-        }
-        .upload-section.dragging {
-            background: rgba(102, 126, 234, 0.2);
-            border-color: #667eea;
-            border-style: solid;
+            background: rgba(230, 57, 70, 0.1);
+            border-color: #ff6b7a;
         }
         .upload-section input { display: none; }
-        .upload-icon {
-            font-size: 72px;
-            margin-bottom: 20px;
-            position: relative;
-            z-index: 1;
-        }
         .upload-label {
             cursor: pointer;
-            font-size: 20px;
-            color: #fff;
-            font-weight: 600;
-            position: relative;
-            z-index: 1;
-        }
-        .upload-hint {
-            font-size: 14px;
+            font-size: 18px;
             color: #aaa;
-            margin-top: 10px;
-            position: relative;
-            z-index: 1;
+        }
+        .upload-section.dragging {
+            background: rgba(230, 57, 70, 0.2);
+            border-color: #ff6b7a;
         }
         .file-info {
-            margin-top: 15px;
-            font-size: 16px;
-            color: #4facfe;
-            font-weight: 600;
-            position: relative;
-            z-index: 1;
+            margin-top: 10px;
+            font-size: 14px;
+            color: #4caf50;
         }
-        
-        /* Controls */
         .controls {
             display: flex;
-            gap: 15px;
+            gap: 10px;
             justify-content: center;
             flex-wrap: wrap;
-            margin-bottom: 30px;
+            margin-bottom: 20px;
         }
         button {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #e63946, #d62828);
             color: #fff;
             border: none;
-            border-radius: 10px;
-            padding: 15px 35px;
+            border-radius: 8px;
+            padding: 12px 24px;
             font-size: 16px;
             font-weight: 600;
             cursor: pointer;
             transition: all 0.3s ease;
-            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
-            position: relative;
-            overflow: hidden;
-        }
-        button::before {
-            content: '';
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            width: 0;
-            height: 0;
-            border-radius: 50%;
-            background: rgba(255,255,255,0.2);
-            transform: translate(-50%, -50%);
-            transition: width 0.6s, height 0.6s;
-        }
-        button:hover::before {
-            width: 300px;
-            height: 300px;
+            box-shadow: 0 4px 10px rgba(230, 57, 70, 0.3);
         }
         button:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.6);
+            background: linear-gradient(135deg, #d62828, #a71228);
+            transform: translateY(-2px);
         }
         button:disabled {
             opacity: 0.5;
             cursor: not-allowed;
             transform: none;
         }
-        button:disabled:hover::before {
-            width: 0;
-            height: 0;
-        }
-        .btn-clear {
-            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-            box-shadow: 0 6px 20px rgba(245, 87, 108, 0.4);
-        }
-        
-        /* Loading */
         .loading {
             display: none;
             text-align: center;
-            padding: 60px;
-            background: rgba(255,255,255,0.05);
-            border-radius: 15px;
-            backdrop-filter: blur(10px);
-            margin-bottom: 30px;
+            padding: 40px;
         }
         .spinner {
-            width: 60px;
-            height: 60px;
-            margin: 0 auto 20px;
-            position: relative;
-        }
-        .spinner::before,
-        .spinner::after {
-            content: '';
-            position: absolute;
+            border: 4px solid rgba(230, 57, 70, 0.2);
+            border-top: 4px solid #e63946;
             border-radius: 50%;
-            border: 4px solid transparent;
-            border-top-color: #667eea;
-            width: 60px;
-            height: 60px;
-            animation: spin 1.2s linear infinite;
-        }
-        .spinner::after {
-            border-top-color: #4facfe;
-            animation-duration: 1.8s;
-            animation-direction: reverse;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
         }
         @keyframes spin {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
-        .loading p {
-            font-size: 18px;
-            color: #aaa;
+        .message {
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 10px;
         }
-        
-        /* Results Section */
-        #comparisonResults {
-            display: none;
+        .error {
+            background: rgba(255, 100, 100, 0.2);
+            border-left: 4px solid #ff6b7a;
+            color: #ff9999;
         }
-        
-        /* Comparison Header */
+        .success {
+            background: rgba(76, 175, 80, 0.2);
+            border-left: 4px solid #4caf50;
+            color: #90ee90;
+        }
+
+        /* Comparison Results */
         .comparison-header {
             text-align: center;
-            margin-bottom: 30px;
-            padding: 30px;
-            background: linear-gradient(135deg, rgba(102, 126, 234, 0.1), rgba(118, 75, 162, 0.1));
-            border-radius: 15px;
-            border: 1px solid rgba(102, 126, 234, 0.3);
-            backdrop-filter: blur(10px);
+            margin: 20px 0;
+            padding: 20px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 10px;
         }
         .comparison-header h2 {
-            font-size: 32px;
-            margin-bottom: 20px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
+            color: #e63946;
+            margin-bottom: 15px;
         }
         .model-stats {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 25px;
-            max-width: 900px;
+            gap: 20px;
+            max-width: 800px;
             margin: 0 auto;
         }
         .model-stat-card {
-            background: rgba(0,0,0,0.3);
-            padding: 25px;
-            border-radius: 12px;
-            border: 2px solid;
-            transition: all 0.3s ease;
-            position: relative;
-            overflow: hidden;
-        }
-        .model-stat-card::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 4px;
+            background: rgba(255,255,255,0.05);
+            padding: 20px;
+            border-radius: 8px;
+            border-left: 4px solid;
         }
         .model-stat-card.resnet50 {
-            border-color: #f093fb;
-        }
-        .model-stat-card.resnet50::before {
-            background: linear-gradient(90deg, #f093fb, #f5576c);
+            border-left-color: #e63946;
         }
         .model-stat-card.resnet101 {
-            border-color: #4facfe;
-        }
-        .model-stat-card.resnet101::before {
-            background: linear-gradient(90deg, #4facfe, #00f2ea);
-        }
-        .model-stat-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+            border-left-color: #4caf50;
         }
         .model-stat-card h3 {
-            font-size: 20px;
-            margin-bottom: 15px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
+            font-size: 18px;
+            margin-bottom: 10px;
         }
-        .count {
-            font-size: 48px;
-            font-weight: 700;
-            margin: 10px 0;
+        .model-stat-card .count {
+            font-size: 36px;
+            font-weight: bold;
         }
         .model-stat-card.resnet50 .count {
-            background: linear-gradient(135deg, #f093fb, #f5576c);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
+            color: #e63946;
         }
         .model-stat-card.resnet101 .count {
-            background: linear-gradient(135deg, #4facfe, #00f2ea);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
+            color: #4caf50;
         }
-        .label {
+        .model-stat-card .label {
             font-size: 14px;
             color: #aaa;
-            text-transform: uppercase;
-            letter-spacing: 1px;
+            margin-top: 5px;
         }
         
-        /* Visual Comparison */
         .comparison-visual {
-            margin-bottom: 30px;
-            background: rgba(255,255,255,0.05);
-            border-radius: 15px;
-            padding: 30px;
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255,255,255,0.1);
-        }
-        .comparison-visual h3 {
-            font-size: 24px;
-            margin-bottom: 20px;
-            text-align: center;
-            color: #fff;
-        }
-        .legend {
-            display: flex;
-            justify-content: center;
-            gap: 40px;
-            margin-bottom: 25px;
-            padding: 15px;
+            margin-top: 30px;
             background: rgba(0,0,0,0.3);
             border-radius: 10px;
-            flex-wrap: wrap;
+            padding: 20px;
         }
-        .legend-item {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            font-size: 16px;
-            font-weight: 600;
-        }
-        .legend-box {
-            width: 40px;
-            height: 25px;
-            border-radius: 5px;
-            border: 3px solid;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
-        }
-        .legend-box.red { 
-            border-color: #f093fb;
-            background: rgba(240, 147, 251, 0.2);
-        }
-        .legend-box.cyan { 
-            border-color: #4facfe;
-            background: rgba(79, 172, 254, 0.2);
-        }
-        .comparison-image-wrapper {
-            position: relative;
-            border-radius: 12px;
-            overflow: hidden;
-            box-shadow: 0 15px 50px rgba(0,0,0,0.5);
-            background: #000;
+        .comparison-visual h3 {
+            color: #e63946;
+            margin-bottom: 15px;
+            text-align: center;
         }
         .comparison-image {
             width: 100%;
-            display: block;
+            border-radius: 8px;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.5);
         }
         
-        /* Side by Side Results */
         .side-by-side-results {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 25px;
-            margin-top: 30px;
+            gap: 20px;
+            margin-top: 20px;
         }
         @media (max-width: 1200px) {
             .side-by-side-results { grid-template-columns: 1fr; }
             .model-stats { grid-template-columns: 1fr; }
-            .model-info-section { grid-template-columns: 1fr; }
         }
         .result-box {
-            background: rgba(255,255,255,0.05);
-            border-radius: 12px;
-            padding: 25px;
-            border: 2px solid;
-            backdrop-filter: blur(10px);
-            transition: all 0.3s ease;
-        }
-        .result-box:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+            background: rgba(0,0,0,0.3);
+            border-radius: 10px;
+            padding: 20px;
+            border-left: 4px solid;
         }
         .result-box.resnet50 {
-            border-color: #f093fb;
+            border-left-color: #e63946;
         }
         .result-box.resnet101 {
-            border-color: #4facfe;
+            border-left-color: #4caf50;
         }
         .result-box h3 {
-            margin-bottom: 20px;
-            font-size: 22px;
+            margin-bottom: 15px;
+        }
+        .result-box.resnet50 h3 {
+            color: #e63946;
+        }
+        .result-box.resnet101 h3 {
+            color: #4caf50;
+        }
+        .result-info {
+            background: rgba(255,255,255,0.05);
+            border-radius: 6px;
+            padding: 15px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            max-height: 400px;
+            overflow-y: auto;
+            line-height: 1.6;
+        }
+        .detection-item {
+            padding: 8px;
+            margin: 5px 0;
+            background: rgba(255,255,255,0.03);
+            border-radius: 4px;
+            border-left: 2px solid rgba(76, 175, 80, 0.5);
+        }
+        .legend {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            margin: 20px 0;
+            padding: 15px;
+            background: rgba(0,0,0,0.2);
+            border-radius: 8px;
+        }
+        .legend-item {
             display: flex;
             align-items: center;
             gap: 10px;
         }
-        .result-box.resnet50 h3 {
-            color: #f093fb;
+        .legend-color {
+            width: 30px;
+            height: 15px;
+            border-radius: 3px;
         }
-        .result-box.resnet101 h3 {
-            color: #4facfe;
-        }
-        .result-info {
-            background: rgba(0,0,0,0.4);
-            border-radius: 8px;
-            padding: 20px;
-            font-family: 'Courier New', monospace;
-            font-size: 13px;
-            max-height: 500px;
-            overflow-y: auto;
-            line-height: 1.8;
-        }
-        .result-info::-webkit-scrollbar {
-            width: 8px;
-        }
-        .result-info::-webkit-scrollbar-track {
-            background: rgba(255,255,255,0.05);
-            border-radius: 10px;
-        }
-        .result-info::-webkit-scrollbar-thumb {
-            background: rgba(102, 126, 234, 0.5);
-            border-radius: 10px;
-        }
-        .result-info::-webkit-scrollbar-thumb:hover {
-            background: rgba(102, 126, 234, 0.8);
-        }
-        .detection-item {
-            padding: 12px;
-            margin: 8px 0;
-            background: rgba(255,255,255,0.05);
-            border-radius: 6px;
-            border-left: 3px solid;
-            transition: all 0.2s ease;
-        }
-        .result-box.resnet50 .detection-item {
-            border-left-color: #f093fb;
-        }
-        .result-box.resnet101 .detection-item {
-            border-left-color: #4facfe;
-        }
-        .detection-item:hover {
-            background: rgba(255,255,255,0.1);
-            transform: translateX(5px);
-        }
-        .detection-item strong {
-            color: #fff;
-            font-size: 14px;
-        }
-        .no-detections {
-            text-align: center;
-            padding: 40px;
-            color: #666;
-            font-style: italic;
-        }
-        
-        /* Messages */
-        .message {
-            padding: 20px;
-            border-radius: 10px;
-            margin-top: 20px;
-            border-left: 4px solid;
-            backdrop-filter: blur(10px);
-        }
-        .error {
-            background: rgba(245, 87, 108, 0.2);
-            border-left-color: #f5576c;
-            color: #ffb3b3;
-        }
-        .success {
-            background: rgba(79, 172, 254, 0.2);
-            border-left-color: #4facfe;
-            color: #b3e5ff;
-        }
+        .legend-color.red { background: #e63946; }
+        .legend-color.lime { background: #4caf50; }
     </style>
 </head>
 <body>
     <div class="container">
-        <!-- Header -->
-        <div class="header">
-            <h1>🔬 Faster R-CNN Model Comparison</h1>
-            <p>Compare ResNet50 vs ResNet101 backbone performance side by side</p>
-        </div>
-
-        <!-- Model Info Cards -->
-        <div class="model-info-section">
-            <div class="model-info-card resnet50">
-                <h3>
-                    <span class="model-badge resnet50">ResNet50</span>
-                    Lightweight Model
-                </h3>
-                <ul>
-                    <li>50 layers deep</li>
-                    <li>Faster inference time</li>
-                    <li>Lower memory footprint</li>
-                    <li>Good for real-time applications</li>
-                </ul>
-            </div>
-            <div class="model-info-card resnet101">
-                <h3>
-                    <span class="model-badge resnet101">ResNet101</span>
-                    Robust Model
-                </h3>
-                <ul>
-                    <li>101 layers deep</li>
-                    <li>Higher accuracy potential</li>
-                    <li>Better feature extraction</li>
-                    <li>Ideal for precision tasks</li>
-                </ul>
-            </div>
-        </div>
-
-        <!-- Upload Section -->
+        <h1>🔬 Faster R-CNN Model Comparison</h1>
+        <p style="text-align:center; color:#aaa; margin-bottom:30px;">
+            Compare ResNet50 vs ResNet101 backbone performance side by side
+        </p>
+        
+        <!-- UPLOAD SECTION -->
         <div class="upload-section" data-upload="comparison">
             <input type="file" id="comparisonInput" accept="image/*">
-            <div class="upload-icon">📤</div>
             <label for="comparisonInput" class="upload-label">
-                Drop your image here or click to browse
+                Click to upload or drag & drop<br>
+                <span style="font-size: 12px; color: #666;">Supported: JPG, PNG, GIF, WebP</span>
             </label>
-            <div class="upload-hint">Supported formats: JPG, PNG, GIF, WebP</div>
             <div class="file-info" id="comparisonFileName"></div>
         </div>
 
-        <!-- Controls -->
         <div class="controls">
-            <button id="compareBtn" disabled>
-                <span style="position:relative; z-index:1;">🔬 Compare Models</span>
-            </button>
-            <button id="clearComparisonBtn" class="btn-clear">
-                <span style="position:relative; z-index:1;">🗑️ Clear</span>
-            </button>
+            <button id="compareBtn" disabled>🔬 Compare Models</button>
+            <button id="clearComparisonBtn">🗑️ Clear</button>
         </div>
 
-        <!-- Loading -->
         <div class="loading" id="comparisonLoading">
             <div class="spinner"></div>
             <p>Running both models for comparison...</p>
-            <p style="font-size:14px; color:#666; margin-top:10px;">This may take a few seconds</p>
         </div>
 
-        <!-- Comparison Results -->
-        <div id="comparisonResults">
-            <!-- Results Header -->
+        <!-- COMPARISON RESULTS -->
+        <div id="comparisonResults" style="display: none;">
             <div class="comparison-header">
                 <h2>📊 Comparison Results</h2>
                 <div class="model-stats">
                     <div class="model-stat-card resnet50">
-                        <h3>
-                            <span class="model-badge resnet50">ResNet50</span>
-                        </h3>
+                        <h3>🔴 ResNet50</h3>
                         <div class="count" id="resnet50Count">0</div>
                         <div class="label">Objects Detected</div>
                     </div>
                     <div class="model-stat-card resnet101">
-                        <h3>
-                            <span class="model-badge resnet101">ResNet101</span>
-                        </h3>
+                        <h3>🟢 ResNet101</h3>
                         <div class="count" id="resnet101Count">0</div>
                         <div class="label">Objects Detected</div>
                     </div>
                 </div>
             </div>
 
-            <!-- Visual Comparison -->
             <div class="comparison-visual">
                 <h3>🖼️ Side-by-Side Visual Comparison</h3>
                 <div class="legend">
                     <div class="legend-item">
-                        <div class="legend-box red"></div>
+                        <div class="legend-color red"></div>
                         <span>ResNet50 Detections</span>
                     </div>
                     <div class="legend-item">
-                        <div class="legend-box cyan"></div>
+                        <div class="legend-color lime"></div>
                         <span>ResNet101 Detections</span>
                     </div>
                 </div>
-                <div class="comparison-image-wrapper">
-                    <img id="comparisonImage" class="comparison-image" alt="Comparison">
-                </div>
+                <img id="comparisonImage" class="comparison-image" alt="Comparison">
             </div>
 
-            <!-- Side by Side Details -->
             <div class="side-by-side-results">
                 <div class="result-box resnet50">
-                    <h3>
-                        <span class="model-badge resnet50">ResNet50</span>
-                        Detections
-                    </h3>
+                    <h3>🔴 ResNet50 Detections</h3>
                     <div class="result-info" id="resnet50Info">
-                        <div class="no-detections">No detections to display</div>
+                        <p>No detections</p>
                     </div>
                 </div>
                 <div class="result-box resnet101">
-                    <h3>
-                        <span class="model-badge resnet101">ResNet101</span>
-                        Detections
-                    </h3>
+                    <h3>🟢 ResNet101 Detections</h3>
                     <div class="result-info" id="resnet101Info">
-                        <div class="no-detections">No detections to display</div>
+                        <p>No detections</p>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Error Messages -->
         <div id="comparisonError"></div>
     </div>
 
@@ -670,7 +363,7 @@
         const state = { file: null };
 
         const $ = (id) => document.getElementById(id);
-        const show = (el) => el.style.display = 'block';
+        const show = (el) => el.style.display = el.tagName === 'DIV' ? 'block' : 'inline-block';
         const hide = (el) => el.style.display = 'none';
         const showMessage = (container, message, type = 'error') => {
             container.innerHTML = `<div class="message ${type}">${message}</div>`;
@@ -715,7 +408,7 @@
             const file = els.input.files[0];
             if (file) {
                 state.file = file;
-                els.fileName.textContent = `✅ ${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
+                els.fileName.textContent = `Selected: ${file.name}`;
                 els.compareBtn.disabled = false;
                 clearMessage(els.error);
             }
@@ -748,16 +441,12 @@
                     fetch('/visualize-comparison', { method: 'POST', body: formData })
                 ]);
 
-                if (!dataRes.ok || !visRes.ok) {
-                    throw new Error('Failed to get comparison results');
-                }
-
                 const data = await dataRes.json();
                 const visBlob = await visRes.blob();
 
-                // Update counts with animation
-                animateCount(els.resnet50Count, data.resnet50.num_detections);
-                animateCount(els.resnet101Count, data.resnet101.num_detections);
+                // Update counts
+                els.resnet50Count.textContent = data.resnet50.num_detections;
+                els.resnet101Count.textContent = data.resnet101.num_detections;
 
                 // Update visualization
                 els.comparisonImage.src = URL.createObjectURL(visBlob);
@@ -766,55 +455,41 @@
                 if (data.resnet50.detections.length > 0) {
                     els.resnet50Info.innerHTML = data.resnet50.detections.map((d, i) => `
                         <div class="detection-item">
-                            <strong>🎯 Object #${i + 1}</strong><br>
-                            <span style="color:#aaa;">Label ID:</span> <span style="color:#fff;">${d.label_id}</span> | 
-                            <span style="color:#aaa;">Confidence:</span> <span style="color:#4facfe;">${(d.score * 100).toFixed(2)}%</span><br>
-                            <span style="color:#aaa;">Bounding Box:</span> [${Math.round(d.x_min)}, ${Math.round(d.y_min)}, ${Math.round(d.x_max)}, ${Math.round(d.y_max)}]
+                            <strong>Object #${i + 1}</strong><br>
+                            Label ID: ${d.label_id} | Score: ${d.score.toFixed(4)}<br>
+                            Box: [${Math.round(d.x_min)}, ${Math.round(d.y_min)}, ${Math.round(d.x_max)}, ${Math.round(d.y_max)}]
                         </div>
                     `).join('');
                 } else {
-                    els.resnet50Info.innerHTML = '<div class="no-detections">No objects detected by ResNet50</div>';
+                    els.resnet50Info.innerHTML = '<p style="color:#666;">No objects detected</p>';
                 }
 
                 // Update ResNet101 detections
                 if (data.resnet101.detections.length > 0) {
                     els.resnet101Info.innerHTML = data.resnet101.detections.map((d, i) => `
                         <div class="detection-item">
-                            <strong>🎯 Object #${i + 1}</strong><br>
-                            <span style="color:#aaa;">Label ID:</span> <span style="color:#fff;">${d.label_id}</span> | 
-                            <span style="color:#aaa;">Confidence:</span> <span style="color:#4facfe;">${(d.score * 100).toFixed(2)}%</span><br>
-                            <span style="color:#aaa;">Bounding Box:</span> [${Math.round(d.x_min)}, ${Math.round(d.y_min)}, ${Math.round(d.x_max)}, ${Math.round(d.y_max)}]
+                            <strong>Object #${i + 1}</strong><br>
+                            Label ID: ${d.label_id} | Score: ${d.score.toFixed(4)}<br>
+                            Box: [${Math.round(d.x_min)}, ${Math.round(d.y_min)}, ${Math.round(d.x_max)}, ${Math.round(d.y_max)}]
                         </div>
                     `).join('');
                 } else {
-                    els.resnet101Info.innerHTML = '<div class="no-detections">No objects detected by ResNet101</div>';
+                    els.resnet101Info.innerHTML = '<p style="color:#666;">No objects detected</p>';
                 }
 
                 hide(els.loading);
                 show(els.results);
 
-                // Smooth scroll to results
-                els.results.scrollIntoView({ behavior: 'smooth', block: 'start' });
-
             } catch (e) {
                 hide(els.loading);
-                showMessage(els.error, `❌ Error: ${e.message}`);
+                showMessage(els.error, `Error: ${e.message}`);
             }
         };
 
-        const animateCount = (element, target) => {
-            let current = 0;
-            const increment = target / 30;
-            const timer = setInterval(() => {
-                current += increment;
-                if (current >= target) {
-                    element.textContent = target;
-                    clearInterval(timer);
-                } else {
-                    element.textContent = Math.floor(current);
-                }
-            }, 30);
-        };
-
         // Event listeners
-        els
+        els.input.addEventListener('change', setFile);
+        els.compareBtn.addEventListener('click', compareModels);
+        els.clearBtn.addEventListener('click', clearAll);
+    </script>
+</body>
+</html>
