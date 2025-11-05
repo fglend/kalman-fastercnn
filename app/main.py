@@ -51,7 +51,7 @@ app.add_middleware(
 # ============================================================
 # Model Loader - Load Both Models from .pth files
 # ============================================================
-def load_model_from_checkpoint(checkpoint_path, backbone="resnet50", num_classes=91):
+def load_model_from_checkpoint(checkpoint_path, backbone="resnet50", num_classes=7):
     """Load a trained Faster R-CNN FPN model from checkpoint."""
     import torchvision
     from torchvision.models.detection import fasterrcnn_resnet50_fpn, fasterrcnn_resnet50_fpn_v2
@@ -64,7 +64,7 @@ def load_model_from_checkpoint(checkpoint_path, backbone="resnet50", num_classes
         try:
             # Try to use torchvision's built-in model
             from torchvision.models.detection import fasterrcnn_resnet50_fpn
-            model = fasterrcnn_resnet50_fpn(weights=None, num_classes=num_classes)
+            model = fasterrcnn_resnet50_fpn_v2(weights=None, num_classes=num_classes)
         except Exception as e:
             print(f"⚠️ Warning: Could not create model with standard method: {e}")
             # Fallback to custom creation
