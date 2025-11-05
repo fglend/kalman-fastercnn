@@ -6,7 +6,7 @@ import threading
 import queue
 import tempfile
 import torchvision.transforms as T
-from fastapi import FastAPI, UploadFile, File
+from fastapi import FastAPI, UploadFile, File, Response
 from fastapi.responses import StreamingResponse, HTMLResponse
 from PIL import Image, ImageDraw, ImageFont
 from app.model import load_model
@@ -54,7 +54,7 @@ app.add_middleware(
 def load_model_from_checkpoint(checkpoint_path, backbone="resnet50", num_classes=7):
     """Load a trained Faster R-CNN FPN model from checkpoint."""
     import torchvision
-    from torchvision.models.detection import fasterrcnn_resnet50_fpn, fasterrcnn_resnet50_fpn_v2
+    from torchvision.models.detection import fasterrcnn_resnet50_fpn_v2
     
     # Create model based on backbone using torchvision's FPN models
     print(f"Creating Faster R-CNN with {backbone.upper()} + FPN backbone...")
@@ -1055,7 +1055,7 @@ def compare_models(file: UploadFile = File(...)):
 
         threading.Thread(target=async_save, daemon=True).start()
 
-        print(f"✅ ResNet50: {len(detections_resnet50)} objects | ResNet101: {len(detections_resnet101)} objects")
+        print(f"✅ Stand-Alone: {len(detections_resnet50)} objects | Hybrid: {len(detections_resnet101)} objects")
         return result_data
 
     except Exception as e:
@@ -1122,8 +1122,8 @@ def visualize_comparison(file: UploadFile = File(...)):
         # Add labels
         draw_combined = ImageDraw.Draw(combined)
         title_font = ImageFont.load_default()
-        draw_combined.text((width // 2 - 50, 10), "ResNet50", fill="red", font=title_font)
-        draw_combined.text((width + width // 2 - 30, 10), "ResNet101", fill="lime", font=title_font)
+        draw_combined.text((width // 2 - 50, 10), "Stand-Alone", fill="red", font=title_font)
+        draw_combined.text((width + width // 2 - 30, 10), "Hybrid", fill="lime", font=title_font)
         
         # Paste images
         combined.paste(image_50, (0, 40))
@@ -1199,6 +1199,43 @@ def list_comparisons():
     except Exception as e:
         print(f"❌ Comparison list error: {e}")
         return {"items": [], "error": str(e)}
+
+
+@app.get("/comparisons/image/{timestamp}")
+def get_comparison_image(timestamp: str):
+    """Stream the saved original image for a comparison item."""
+    img_path = os.path.join(RESULTS_DIR, "comparisons", f"{timestamp}.jpg")
+    if not os.path.exists(img_path):
+        return JSONResponse(content={"error": "Image not found"}, status_code=404)
+    return StreamingResponse(open(img_path, "rb"), media_type="image/jpeg")
+
+@app.get("/comparisons/json/{timestamp}")
+def get_comparison_json(timestamp: str):
+    """Return the saved comparison JSON."""
+    json_path = os.path.join(RESULTS_DIR, "comparisons", f"{timestamp}.json")
+    if not os.path.exists(json_path):
+        return JSONResponse(content={"error": "JSON not found"}, status_code=404)
+    with open(json_path, "r") as f:
+        data = json.load(f)
+    return data
+
+@app.delete("/comparisons/delete/{timestamp}")
+def delete_comparison_item(timestamp: str):
+    """Delete a comparison (image + json)."""
+    deleted = []
+    img_path = os.path.join(RESULTS_DIR, "comparisons", f"{timestamp}.jpg")
+    json_path = os.path.join(RESULTS_DIR, "comparisons", f"{timestamp}.json")
+
+    if os.path.exists(img_path):
+        os.remove(img_path)
+        deleted.append("image")
+    if os.path.exists(json_path):
+        os.remove(json_path)
+        deleted.append("json")
+
+    if deleted:
+        return {"success": True, "deleted": deleted}
+    return JSONResponse(content={"error": "Item not found"}, status_code=404)
 
 # ============================================================
 # Comparison Page Route
