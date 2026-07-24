@@ -321,7 +321,7 @@ Comparison artifacts saved under `/results/comparisons`.
 ## 👨‍💻 Author
 
 **Glend Dale Ferrer**  
-📧 mgdferrer@tip.edu.ph
+📧 glendferrer05@gmail.com
 
 ---
 
